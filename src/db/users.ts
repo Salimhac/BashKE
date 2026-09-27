@@ -2,13 +2,45 @@ import { eq } from 'drizzle-orm';
 import { db } from './index.ts';
 import { users, wishes, wishLikes, notifications } from './schema.ts';
 
+// Helper to execute DB operations with retry for Neon serverless cold starts / pauses
+async function withDbRetry<T>(operation: () => Promise<T>, maxRetries = 2, delayMs = 600): Promise<T> {
+  let lastError: any;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await operation();
+    } catch (err: any) {
+      lastError = err;
+      const errMsg = err?.message || String(err);
+      const isTransient =
+        errMsg.includes('Connection terminated') ||
+        errMsg.includes('connection closed') ||
+        errMsg.includes('timeout') ||
+        errMsg.includes('ECONNRESET') ||
+        errMsg.includes('ETIMEDOUT') ||
+        errMsg.includes('57P01') ||
+        errMsg.includes('cannot acquire connection') ||
+        errMsg.includes('deadlock');
+
+      if (attempt < maxRetries && isTransient) {
+        console.warn(`[Neon DB] Transient error detected (attempt ${attempt + 1}/${maxRetries + 1}), retrying after delay:`, errMsg);
+        await new Promise((res) => setTimeout(res, delayMs * (attempt + 1)));
+        continue;
+      }
+      break;
+    }
+  }
+  throw lastError;
+}
+
 export async function cleanAllUsersAndData() {
   try {
-    await db.delete(wishLikes);
-    await db.delete(wishes);
-    await db.delete(notifications);
-    await db.delete(users);
-    return { success: true };
+    return await withDbRetry(async () => {
+      await db.delete(wishLikes);
+      await db.delete(wishes);
+      await db.delete(notifications);
+      await db.delete(users);
+      return { success: true };
+    });
   } catch (error) {
     console.error('Error in cleanAllUsersAndData:', error);
     throw new Error('Database wipe operation failed.', { cause: error });
@@ -93,8 +125,10 @@ export async function getUsers() {
 
 export async function getUserByUid(uid: string) {
   try {
-    const result = await db.select().from(users).where(eq(users.uid, uid)).limit(1);
-    return result[0] || null;
+    return await withDbRetry(async () => {
+      const result = await db.select().from(users).where(eq(users.uid, uid)).limit(1);
+      return result[0] || null;
+    });
   } catch (error) {
     console.error('Error in getUserByUid:', error);
     throw new Error('Database operation failed. Could not fetch user.', { cause: error });
@@ -103,9 +137,11 @@ export async function getUserByUid(uid: string) {
 
 export async function getUserByEmail(email: string) {
   try {
-    const normalized = email.toLowerCase().trim();
-    const result = await db.select().from(users).where(eq(users.email, normalized)).limit(1);
-    return result[0] || null;
+    return await withDbRetry(async () => {
+      const normalized = email.toLowerCase().trim();
+      const result = await db.select().from(users).where(eq(users.email, normalized)).limit(1);
+      return result[0] || null;
+    });
   } catch (error) {
     console.error('Error in getUserByEmail:', error);
     throw new Error('Database operation failed. Could not fetch user by email.', { cause: error });
@@ -123,26 +159,28 @@ export async function createUserWithPassword(params: {
   avatarSeed?: string;
 }) {
   try {
-    const normalizedEmail = params.email.toLowerCase().trim();
-    const fallbackSeed = params.avatarSeed || `seed_${params.uid.slice(0, 8)}`;
-    const userBirthday = params.birthday || '1998-05-15';
-    const userGender = params.gender || 'prefer-not-to-say';
+    return await withDbRetry(async () => {
+      const normalizedEmail = params.email.toLowerCase().trim();
+      const fallbackSeed = params.avatarSeed || `seed_${params.uid.slice(0, 8)}`;
+      const userBirthday = params.birthday || '1998-05-15';
+      const userGender = params.gender || 'prefer-not-to-say';
 
-    const result = await db.insert(users)
-      .values({
-        uid: params.uid,
-        email: normalizedEmail,
-        passwordHash: params.passwordHash,
-        displayName: params.displayName,
-        avatarSeed: fallbackSeed,
-        birthday: userBirthday,
-        gender: userGender,
-        realName: params.realName || null,
-        isEmailVerified: true,
-      })
-      .returning();
+      const result = await db.insert(users)
+        .values({
+          uid: params.uid,
+          email: normalizedEmail,
+          passwordHash: params.passwordHash,
+          displayName: params.displayName,
+          avatarSeed: fallbackSeed,
+          birthday: userBirthday,
+          gender: userGender,
+          realName: params.realName || null,
+          isEmailVerified: true,
+        })
+        .returning();
 
-    return result[0];
+      return result[0];
+    });
   } catch (error) {
     console.error('Error in createUserWithPassword:', error);
     throw new Error('Database operation failed. Could not create account.', { cause: error });
@@ -154,19 +192,21 @@ export async function updateUserProfile(
   data: { displayName?: string; avatarSeed?: string; gender?: string; birthday?: string }
 ) {
   try {
-    const updatePayload: Record<string, any> = { updatedAt: new Date() };
-    if (data.displayName !== undefined) updatePayload.displayName = data.displayName;
-    if (data.avatarSeed !== undefined) updatePayload.avatarSeed = data.avatarSeed;
-    if (data.gender !== undefined) updatePayload.gender = data.gender;
-    if (data.birthday !== undefined) updatePayload.birthday = data.birthday;
+    return await withDbRetry(async () => {
+      const updatePayload: Record<string, any> = { updatedAt: new Date() };
+      if (data.displayName !== undefined) updatePayload.displayName = data.displayName;
+      if (data.avatarSeed !== undefined) updatePayload.avatarSeed = data.avatarSeed;
+      if (data.gender !== undefined) updatePayload.gender = data.gender;
+      if (data.birthday !== undefined) updatePayload.birthday = data.birthday;
 
-    const result = await db
-      .update(users)
-      .set(updatePayload)
-      .where(eq(users.uid, uid))
-      .returning();
+      const result = await db
+        .update(users)
+        .set(updatePayload)
+        .where(eq(users.uid, uid))
+        .returning();
 
-    return result[0] || null;
+      return result[0] || null;
+    });
   } catch (error) {
     console.error('Error in updateUserProfile:', error);
     throw new Error('Database operation failed. Could not update user profile.', { cause: error });

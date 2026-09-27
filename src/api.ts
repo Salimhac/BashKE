@@ -72,7 +72,7 @@ export const api = {
     safeStorage.setItem(SIMULATED_DATE_KEY, date);
   },
 
-  async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  async request<T>(endpoint: string, options: RequestInit = {}, retries = 1): Promise<T> {
     const token = this.getToken();
     const guestToken = this.getGuestToken();
     const simulatedDate = this.getSimulatedDate();
@@ -88,18 +88,61 @@ export const api = {
       headers['Authorization'] = `Bearer ${token}`;
     }
 
-    const res = await fetch(`/api${endpoint}`, {
-      ...options,
-      headers,
-    });
+    let lastError: any;
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        const res = await fetch(`/api${endpoint}`, {
+          ...options,
+          headers,
+        });
 
-    const data = await res.json().catch(() => ({}));
+        // Parse response body safely
+        const text = await res.text();
+        let data: any = {};
+        try {
+          data = text ? JSON.parse(text) : {};
+        } catch {
+          data = { message: text };
+        }
 
-    if (!res.ok) {
-      throw new Error(data.message || data.error || 'Network request failed');
+        if (!res.ok) {
+          // If server error 502/503/504 or Neon cold start error, retry once
+          if (attempt < retries && (res.status === 502 || res.status === 503 || res.status === 504 || (res.status === 500 && data.message?.includes('Database operation failed')))) {
+            await new Promise((r) => setTimeout(r, 1000));
+            continue;
+          }
+
+          const defaultMsg =
+            res.status === 502 || res.status === 503 || res.status === 504
+              ? 'Database or server is temporarily unavailable or resuming from sleep. Please try again in a moment.'
+              : res.status === 500
+              ? data.message || 'Database connection error. If using Neon database, please allow a few seconds for it to wake up.'
+              : `Request failed with status ${res.status}`;
+
+          throw new Error(data.message || data.error || defaultMsg);
+        }
+
+        return data as T;
+      } catch (err: any) {
+        lastError = err;
+        const isNetworkErr =
+          err.name === 'TypeError' ||
+          err.message?.includes('fetch') ||
+          err.message?.includes('NetworkError') ||
+          err.message?.includes('Network request failed');
+
+        if (attempt < retries && isNetworkErr) {
+          await new Promise((r) => setTimeout(r, 1000));
+          continue;
+        }
+
+        if (isNetworkErr) {
+          throw new Error('Network request failed: Could not connect to the server. Please check your internet connection or try again in a few seconds.');
+        }
+        throw err;
+      }
     }
-
-    return data as T;
+    throw lastError;
   },
 
   // Auth

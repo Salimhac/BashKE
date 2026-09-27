@@ -1,31 +1,46 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../api';
-import { X, Lock, ShieldCheck, Mail, Key, User, Calendar, Sparkles, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { X, Lock, ShieldCheck, Mail, Key, User, Calendar, Sparkles, AlertCircle, CheckCircle2, RefreshCw, WifiOff } from 'lucide-react';
 
-function formatFriendlyAuthError(err: any): string {
-  if (!err) return 'An unexpected error occurred. Please try again.';
-  const msg = typeof err === 'string' ? err : err.message || err.error || '';
+function formatFriendlyAuthError(err: any): { text: string; isNetwork: boolean } {
+  if (!err) return { text: 'An unexpected error occurred. Please try again.', isNetwork: false };
+  const raw = typeof err === 'string' ? err : err.message || err.error || '';
+  const msg = raw.toLowerCase();
 
-  if (msg.includes('EMAIL_EXISTS') || msg.includes('already exists') || msg.includes('email-already-in-use')) {
-    return 'An account with this email address already exists. Please sign in instead.';
+  if (msg.includes('email_exists') || msg.includes('already exists') || msg.includes('email-already-in-use')) {
+    return { text: 'An account with this email address already exists. Please sign in instead.', isNetwork: false };
   }
-  if (msg.includes('INVALID_CREDENTIALS') || msg.includes('Incorrect password') || msg.includes('wrong-password') || msg.includes('Incorrect email or password')) {
-    return 'Incorrect email or password. Please verify your details.';
+  if (msg.includes('invalid_credentials') || msg.includes('incorrect password') || msg.includes('wrong-password') || msg.includes('incorrect email or password')) {
+    return { text: 'Incorrect email or password. Please verify your details.', isNetwork: false };
   }
-  if (msg.includes('No account found') || msg.includes('USER_NOT_FOUND') || msg.includes('user-not-found')) {
-    return 'No account was found with that email address. Please click "Create one now" below.';
+  if (msg.includes('no account found') || msg.includes('user_not_found') || msg.includes('user-not-found')) {
+    return { text: 'No account was found with that email address. Please click "Create one now" below.', isNetwork: false };
   }
-  if (msg.includes('Password must be at least') || msg.includes('weak-password')) {
-    return 'Please choose a password with at least 6 characters.';
+  if (msg.includes('password must be at least') || msg.includes('weak-password')) {
+    return { text: 'Please choose a password with at least 6 characters.', isNetwork: false };
   }
   if (msg.includes('valid email')) {
-    return 'Please enter a valid email address.';
+    return { text: 'Please enter a valid email address.', isNetwork: false };
   }
-  if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('ECONNREFUSED')) {
-    return 'Could not connect to the database server. Please check your connection and try again.';
+  if (
+    msg.includes('network request failed') ||
+    msg.includes('network-request-failed') ||
+    msg.includes('failed to fetch') ||
+    msg.includes('networkerror') ||
+    msg.includes('econnrefused') ||
+    msg.includes('etimedout') ||
+    msg.includes('connection terminated') ||
+    msg.includes('database operation failed') ||
+    msg.includes('resuming from sleep') ||
+    msg.includes('cold start')
+  ) {
+    return {
+      text: 'Network request failed: Could not connect to the database. If your Neon database was paused/idle, it takes 2-3 seconds to wake up. Please check your connection and tap "Try Again".',
+      isNetwork: true,
+    };
   }
-  return msg;
+  return { text: raw, isNetwork: false };
 }
 
 interface AuthModalProps {
@@ -51,33 +66,34 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, mode, onClose, onS
 
   // Status & errors
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [errorState, setErrorState] = useState<{ message: string; isNetwork: boolean } | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleLogin = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     setLoading(true);
-    setError(null);
+    setErrorState(null);
     try {
       await signInWithEmail(email, password);
       onClose();
     } catch (err: any) {
-      setError(formatFriendlyAuthError(err));
+      const parsed = formatFriendlyAuthError(err);
+      setErrorState({ message: parsed.text, isNetwork: parsed.isNetwork });
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSignup = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSignup = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!birthday) {
-      setError('Please select your date of birth.');
+      setErrorState({ message: 'Please select your date of birth.', isNetwork: false });
       return;
     }
     setLoading(true);
-    setError(null);
+    setErrorState(null);
     try {
       await signUpWithEmail({
         email,
@@ -89,22 +105,24 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, mode, onClose, onS
       });
       onClose();
     } catch (err: any) {
-      setError(formatFriendlyAuthError(err));
+      const parsed = formatFriendlyAuthError(err);
+      setErrorState({ message: parsed.text, isNetwork: parsed.isNetwork });
     } finally {
       setLoading(false);
     }
   };
 
-  const handleRequestReset = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleRequestReset = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     setLoading(true);
-    setError(null);
+    setErrorState(null);
     try {
       await sendPasswordReset(email);
       setSuccess('Password reset link sent! Please check your email inbox.');
       setResetSentNotice('Instructions have been sent to your email. Follow the link in the message to reset your password.');
     } catch (err: any) {
-      setError(formatFriendlyAuthError(err));
+      const parsed = formatFriendlyAuthError(err);
+      setErrorState({ message: parsed.text, isNetwork: parsed.isNetwork });
     } finally {
       setLoading(false);
     }
@@ -139,10 +157,40 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, mode, onClose, onS
 
         {/* Modal Body */}
         <div className="p-6 max-h-[80vh] overflow-y-auto space-y-4">
-          {error && (
-            <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
-              <span>{error}</span>
+          {errorState && (
+            <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs space-y-2">
+              <div className="flex items-start gap-2.5">
+                {errorState.isNetwork ? (
+                  <WifiOff className="w-4 h-4 shrink-0 text-rose-600 mt-0.5" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-600 mt-0.5" />
+                )}
+                <div className="flex-1 leading-relaxed">
+                  <p className="font-semibold text-rose-900 mb-0.5">
+                    {errorState.isNetwork ? 'Connection / Database Notice' : 'Request Notice'}
+                  </p>
+                  <p>{errorState.message}</p>
+                </div>
+              </div>
+
+              {errorState.isNetwork && (
+                <div className="pt-2 border-t border-rose-200/80 flex items-center justify-between">
+                  <span className="text-[11px] text-rose-700">Neon DB may be waking up</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (mode === 'signup') handleSignup();
+                      else if (mode === 'login') handleLogin();
+                      else if (mode === 'reset') handleRequestReset();
+                    }}
+                    disabled={loading}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer disabled:opacity-60"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+                    <span>{loading ? 'Retrying...' : 'Try Again Now'}</span>
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
