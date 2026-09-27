@@ -1,0 +1,6 @@
+{
+  "name": "BirthdayBoard",
+  "description": "An anonymous birthday-wishing platform where users celebrate birthdays with public wish boards while keeping real names and identities strictly private.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
