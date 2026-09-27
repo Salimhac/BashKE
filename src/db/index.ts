@@ -10,7 +10,7 @@ declare global {
 // Function to create or retrieve the connection pool.
 export const createPool = () => {
   if (!global._postgresPool) {
-    const connectionString = process.env.DATABASE_URL;
+    const connectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL;
     if (connectionString) {
       const isSsl = process.env.SQL_SSL === 'false' ? false : { rejectUnauthorized: false };
       global._postgresPool = new Pool({

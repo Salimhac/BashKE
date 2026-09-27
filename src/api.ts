@@ -112,14 +112,21 @@ export const api = {
             continue;
           }
 
+          let errorMessage = data.message || data.error;
+
+          // Detect edge 404 HTML/text pages (like Vercel NOT_FOUND cpt1::... or proxy 404s)
+          if (res.status === 404 || (errorMessage && (errorMessage.includes('NOT_FOUND') || errorMessage.includes('page could not be found') || errorMessage.includes('<!DOCTYPE')))) {
+            errorMessage = 'API server endpoint not found (404). If deployed on Vercel or a static host, ensure serverless API routes (api/index.ts) and vercel.json rewrites are deployed, and DATABASE_URL is set in environment variables.';
+          }
+
           const defaultMsg =
             res.status === 502 || res.status === 503 || res.status === 504
               ? 'Database or server is temporarily unavailable or resuming from sleep. Please try again in a moment.'
               : res.status === 500
-              ? data.message || 'Database connection error. If using Neon database, please allow a few seconds for it to wake up.'
+              ? errorMessage || 'Database connection error. If using Neon database, please allow a few seconds for it to wake up.'
               : `Request failed with status ${res.status}`;
 
-          throw new Error(data.message || data.error || defaultMsg);
+          throw new Error(errorMessage || defaultMsg);
         }
 
         return data as T;

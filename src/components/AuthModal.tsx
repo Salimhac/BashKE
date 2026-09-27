@@ -24,6 +24,17 @@ function formatFriendlyAuthError(err: any): { text: string; isNetwork: boolean }
     return { text: 'Please enter a valid email address.', isNetwork: false };
   }
   if (
+    msg.includes('404') ||
+    msg.includes('not found') ||
+    msg.includes('page could not be found') ||
+    msg.includes('api server endpoint not found')
+  ) {
+    return {
+      text: 'API server endpoint was not found (404). If you deployed to Vercel or a static host, the serverless API routes or vercel.json rewrites are required for backend endpoints. Ensure vercel.json is deployed and DATABASE_URL is set in environment variables.',
+      isNetwork: true,
+    };
+  }
+  if (
     msg.includes('network request failed') ||
     msg.includes('network-request-failed') ||
     msg.includes('failed to fetch') ||

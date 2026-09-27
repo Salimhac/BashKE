@@ -4,7 +4,7 @@ import * as dotenv from "dotenv";
 // Load environment variables from .env file.
 dotenv.config();
 
-const databaseUrl = process.env.DATABASE_URL;
+const databaseUrl = process.env.DATABASE_URL || process.env.POSTGRES_URL;
 const sqlHost = process.env.SQL_HOST;
 const sqlDbName = process.env.SQL_DB_NAME;
 const user = process.env.SQL_ADMIN_USER || process.env.SQL_USER;
