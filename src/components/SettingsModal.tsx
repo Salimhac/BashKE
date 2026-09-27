@@ -9,8 +9,6 @@ import {
   Mail,
   User,
   Calendar,
-  RotateCcw,
-  Trash2,
 } from 'lucide-react';
 
 interface SettingsModalProps {
@@ -19,28 +17,15 @@ interface SettingsModalProps {
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
-  const { user, updateUser, cleanAllUsersAndStartFresh } = useAuth();
+  const { user, updateUser } = useAuth();
 
   const [displayName, setDisplayName] = useState(user?.displayName || '');
   const [customBirthday, setCustomBirthday] = useState(user?.birthday || '');
   const [verificationCode, setVerificationCode] = useState('');
   const [loading, setLoading] = useState(false);
-  const [confirmReset, setConfirmReset] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   if (!isOpen || !user) return null;
-
-  const handleResetAllUsers = async () => {
-    try {
-      setLoading(true);
-      await cleanAllUsersAndStartFresh();
-      onClose();
-      window.location.reload();
-    } catch (err: any) {
-      setStatusMessage({ type: 'error', text: err.message || 'Failed to wipe users.' });
-      setLoading(false);
-    }
-  };
 
   const isPlaceholderBirthday = !user?.birthday || user.birthday === '1996-09-24' || user.birthday === '1995-09-24';
 
@@ -270,50 +255,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                   Set during registration.
                 </p>
               </div>
-            </div>
-
-            {/* Database Fresh Start Option */}
-            <div className="p-3.5 bg-rose-50/70 rounded-2xl border border-rose-200 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-rose-950 flex items-center gap-1.5">
-                  <RotateCcw className="w-3.5 h-3.5 text-rose-700" />
-                  <span>Clean All Users & Start Fresh</span>
-                </span>
-                <span className="text-[10px] text-rose-700 font-semibold uppercase bg-rose-100 px-2 py-0.5 rounded-full border border-rose-200">
-                  Database Reset
-                </span>
-              </div>
-              <p className="text-[11px] text-rose-800 leading-relaxed">
-                Wipe all registered members, wish cards, and celebration boards to start completely fresh with 0 users.
-              </p>
-              {confirmReset ? (
-                <div className="flex items-center gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={handleResetAllUsers}
-                    disabled={loading}
-                    className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl transition-all cursor-pointer shadow-xs"
-                  >
-                    {loading ? 'Cleaning...' : 'Yes, Clean All Users Now'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setConfirmReset(false)}
-                    className="px-3 py-1.5 bg-stone-200 hover:bg-stone-300 text-stone-700 text-xs font-semibold rounded-xl transition-colors cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setConfirmReset(true)}
-                  className="px-3 py-1.5 bg-white hover:bg-rose-100 text-rose-700 border border-rose-300 text-xs font-semibold rounded-xl transition-colors cursor-pointer flex items-center gap-1.5"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>Clean All Users & Start Fresh</span>
-                </button>
-              )}
             </div>
           </div>
         </div>
