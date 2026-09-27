@@ -214,16 +214,16 @@ export const api = {
   },
 
   async requestPasswordReset(email: string) {
-    return this.request<{ success: boolean; message: string; token?: string }>('/auth/request-password-reset', {
+    return this.request<{ success: boolean; message: string; previewCode?: string }>('/auth/request-password-reset', {
       method: 'POST',
       body: JSON.stringify({ email }),
     });
   },
 
-  async resetPassword(resetToken: string, newPassword: string) {
-    return this.request<{ success: boolean; message: string }>('/auth/reset-password', {
+  async resetPassword(params: { email: string; code: string; newPassword: string }) {
+    return this.request<{ success: boolean; token: string; user: PrivateUser; message: string }>('/auth/reset-password', {
       method: 'POST',
-      body: JSON.stringify({ resetToken, newPassword }),
+      body: JSON.stringify(params),
     });
   },
 

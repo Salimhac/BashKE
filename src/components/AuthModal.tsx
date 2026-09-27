@@ -8,6 +8,17 @@ function formatFriendlyAuthError(err: any): { text: string; isNetwork: boolean }
   const raw = typeof err === 'string' ? err : err.message || err.error || '';
   const msg = raw.toLowerCase();
 
+  if (
+    msg.includes('username_taken') ||
+    msg.includes('username already taken') ||
+    msg.includes('display name already') ||
+    msg.includes('name already taken')
+  ) {
+    return { text: 'Username already taken. Please choose a different display name.', isNetwork: false };
+  }
+  if (msg.includes('invalid_code') || msg.includes('invalid or expired recovery code')) {
+    return { text: 'Invalid or expired 6-digit recovery code. Please check your code or request a fresh one.', isNetwork: false };
+  }
   if (msg.includes('email_exists') || msg.includes('already exists') || msg.includes('email-already-in-use')) {
     return { text: 'An account with this email address already exists. Please sign in instead.', isNetwork: false };
   }
@@ -62,7 +73,7 @@ interface AuthModalProps {
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, mode, onClose, onSwitchMode }) => {
-  const { signInWithEmail, signUpWithEmail, sendPasswordReset } = useAuth();
+  const { signInWithEmail, signUpWithEmail, sendPasswordReset, completePasswordReset } = useAuth();
 
   // Form states
   const [email, setEmail] = useState('');
@@ -73,6 +84,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, mode, onClose, onS
   const [displayName, setDisplayName] = useState('');
 
   // Password reset states
+  const [resetStep, setResetStep] = useState<'request' | 'verify'>('request');
+  const [recoveryCode, setRecoveryCode] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [previewRecoveryCode, setPreviewRecoveryCode] = useState<string | null>(null);
   const [resetSentNotice, setResetSentNotice] = useState<string | null>(null);
 
   // Status & errors
@@ -125,12 +140,49 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, mode, onClose, onS
 
   const handleRequestReset = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    if (!email.trim()) {
+      setErrorState({ message: 'Please enter your registered account email address.', isNetwork: false });
+      return;
+    }
+    setLoading(true);
+    setErrorState(null);
+    setSuccess(null);
+    try {
+      const res = await sendPasswordReset(email);
+      setResetStep('verify');
+      if (res?.previewCode) {
+        setPreviewRecoveryCode(res.previewCode);
+        setRecoveryCode(res.previewCode);
+      }
+      setSuccess('6-digit recovery code generated successfully!');
+      setResetSentNotice('Enter your 6-digit recovery code and new password below to reset your account.');
+    } catch (err: any) {
+      const parsed = formatFriendlyAuthError(err);
+      setErrorState({ message: parsed.text, isNetwork: parsed.isNetwork });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCompleteReset = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!recoveryCode.trim() || recoveryCode.trim().length !== 6) {
+      setErrorState({ message: 'Please enter the 6-digit recovery code.', isNetwork: false });
+      return;
+    }
+    if (!newPassword || newPassword.length < 6) {
+      setErrorState({ message: 'New password must be at least 6 characters.', isNetwork: false });
+      return;
+    }
     setLoading(true);
     setErrorState(null);
     try {
-      await sendPasswordReset(email);
-      setSuccess('Password reset link sent! Please check your email inbox.');
-      setResetSentNotice('Instructions have been sent to your email. Follow the link in the message to reset your password.');
+      await completePasswordReset({
+        email: email.trim(),
+        code: recoveryCode.trim(),
+        newPassword,
+      });
+      onClose();
     } catch (err: any) {
       const parsed = formatFriendlyAuthError(err);
       setErrorState({ message: parsed.text, isNetwork: parsed.isNetwork });
@@ -404,52 +456,143 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, mode, onClose, onS
             </div>
           )}
 
-          {/* PASSWORD RESET FLOW */}
+          {/* COMPLETE PASSWORD RESET RECOVERY FLOW */}
           {mode === 'reset' && (
             <div className="space-y-4">
               {resetSentNotice && (
                 <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 leading-relaxed">
-                  <p className="font-semibold mb-1">Reset Instructions Sent</p>
+                  <p className="font-semibold mb-1 flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-amber-700" />
+                    <span>Password Recovery Active</span>
+                  </p>
                   <p>{resetSentNotice}</p>
+                  {previewRecoveryCode && (
+                    <div className="mt-2.5 p-2 bg-white rounded-lg border border-amber-300/80 flex items-center justify-between">
+                      <span className="text-[11px] text-stone-600">Your 6-digit recovery code:</span>
+                      <span className="font-mono font-bold text-amber-900 tracking-wider text-sm bg-amber-100 px-2 py-0.5 rounded">
+                        {previewRecoveryCode}
+                      </span>
+                    </div>
+                  )}
                 </div>
               )}
 
-              <form onSubmit={handleRequestReset} className="space-y-3.5">
-                <div>
-                  <label className="block text-xs font-medium text-stone-700 mb-1">
-                    Enter your registered account email
-                  </label>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="you@example.com"
-                    className="w-full text-xs p-2.5 rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
-                    required
-                  />
-                  <p className="text-[11px] text-stone-500 mt-1">
-                    Password reset instructions will be dispatched to your account.
-                  </p>
-                </div>
+              {resetStep === 'request' ? (
+                /* Step 1: Request 6-digit code with email */
+                <form onSubmit={handleRequestReset} className="space-y-3.5">
+                  <div>
+                    <label className="block text-xs font-medium text-stone-700 mb-1">
+                      Enter your registered account email
+                    </label>
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="you@example.com"
+                      className="w-full text-xs p-2.5 rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
+                      required
+                    />
+                    <p className="text-[11px] text-stone-500 mt-1">
+                      A 6-digit verification code will be dispatched to your account for recovery.
+                    </p>
+                  </div>
 
-                <button
-                  type="submit"
-                  disabled={loading || !email}
-                  className="w-full py-2.5 px-4 bg-amber-400 hover:bg-amber-300 text-stone-900 text-xs font-semibold rounded-xl shadow-xs transition-colors cursor-pointer"
-                >
-                  {loading ? 'Sending link...' : 'Send Password Reset Request'}
-                </button>
-
-                <div className="text-center pt-2">
                   <button
-                    type="button"
-                    onClick={() => onSwitchMode('login')}
-                    className="text-xs text-stone-500 hover:text-stone-800 hover:underline cursor-pointer"
+                    type="submit"
+                    disabled={loading || !email.trim()}
+                    className="w-full py-2.5 px-4 bg-amber-400 hover:bg-amber-300 text-stone-900 text-xs font-semibold rounded-xl shadow-xs transition-colors cursor-pointer disabled:opacity-60"
                   >
-                    Back to Sign In
+                    {loading ? 'Generating recovery code...' : 'Send Password Recovery Code'}
                   </button>
-                </div>
-              </form>
+
+                  <div className="text-center pt-2">
+                    <button
+                      type="button"
+                      onClick={() => onSwitchMode('login')}
+                      className="text-xs text-stone-500 hover:text-stone-800 hover:underline cursor-pointer"
+                    >
+                      Back to Sign In
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                /* Step 2: Enter 6-digit recovery code & choose new password */
+                <form onSubmit={handleCompleteReset} className="space-y-3.5">
+                  <div>
+                    <label className="block text-xs font-medium text-stone-700 mb-1">
+                      Account Email
+                    </label>
+                    <input
+                      type="email"
+                      value={email}
+                      disabled
+                      className="w-full text-xs p-2.5 rounded-xl border border-stone-200 bg-stone-100 text-stone-600"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-medium text-stone-700">6-Digit Recovery Code</label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setResetStep('request');
+                          setErrorState(null);
+                        }}
+                        className="text-[10px] text-amber-800 hover:underline cursor-pointer"
+                      >
+                        Resend code
+                      </button>
+                    </div>
+                    <input
+                      type="text"
+                      maxLength={6}
+                      value={recoveryCode}
+                      onChange={(e) => setRecoveryCode(e.target.value.replace(/\D/g, ''))}
+                      placeholder="123456"
+                      className="w-full text-center text-sm font-mono tracking-widest p-2.5 rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-stone-700 mb-1">
+                      New Password (min 6 characters)
+                    </label>
+                    <input
+                      type="password"
+                      minLength={6}
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full text-xs p-2.5 rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
+                      required
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={loading || recoveryCode.length !== 6 || newPassword.length < 6}
+                    className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer disabled:opacity-60 flex items-center justify-center gap-1.5"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>{loading ? 'Updating password...' : 'Reset Password & Sign In'}</span>
+                  </button>
+
+                  <div className="text-center pt-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setResetStep('request');
+                        onSwitchMode('login');
+                      }}
+                      className="text-xs text-stone-500 hover:text-stone-800 hover:underline cursor-pointer"
+                    >
+                      Back to Sign In
+                    </button>
+                  </div>
+                </form>
+              )}
             </div>
           )}
         </div>

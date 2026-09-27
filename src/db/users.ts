@@ -187,6 +187,36 @@ export async function createUserWithPassword(params: {
   }
 }
 
+export async function getUserByDisplayName(displayName: string) {
+  try {
+    return await withDbRetry(async () => {
+      const normalized = displayName.trim().toLowerCase();
+      const all = await db.select().from(users);
+      const match = all.find((u) => u.displayName.trim().toLowerCase() === normalized);
+      return match || null;
+    });
+  } catch (error) {
+    console.error('Error in getUserByDisplayName:', error);
+    throw new Error('Database operation failed. Could not check display name.', { cause: error });
+  }
+}
+
+export async function updateUserPassword(uid: string, passwordHash: string) {
+  try {
+    return await withDbRetry(async () => {
+      const result = await db
+        .update(users)
+        .set({ passwordHash, updatedAt: new Date() })
+        .where(eq(users.uid, uid))
+        .returning();
+      return result[0] || null;
+    });
+  } catch (error) {
+    console.error('Error in updateUserPassword:', error);
+    throw new Error('Database operation failed. Could not update password.', { cause: error });
+  }
+}
+
 export async function updateUserProfile(
   uid: string,
   data: { displayName?: string; avatarSeed?: string; gender?: string; birthday?: string }

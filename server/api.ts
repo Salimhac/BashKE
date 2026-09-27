@@ -6,8 +6,10 @@ import {
   getUsers,
   getUserByUid,
   getUserByEmail,
+  getUserByDisplayName,
   createUserWithPassword,
   updateUserProfile,
+  updateUserPassword,
   cleanAllUsersAndData,
 } from '../src/db/users.ts';
 import { getWishesForRecipient, createWish, toggleWishLike, getLikedWishIds, deleteWish, getTotalWishesCount } from '../src/db/wishes.ts';
@@ -77,6 +79,14 @@ function toPrivateUserFromDb(u: any) {
 // Auth & User Routes (Neon PostgreSQL + JWT)
 // -------------------------------------------------------------
 
+// In-memory store for 6-digit password recovery codes (15 minutes validity)
+interface ResetCodeRecord {
+  code: string;
+  email: string;
+  expiresAt: number;
+}
+const passwordResetCodes = new Map<string, ResetCodeRecord>();
+
 // Sign Up with Email and Password directly into Neon Database
 apiRouter.post('/auth/signup', async (req: Request, res: Response) => {
   try {
@@ -100,9 +110,25 @@ apiRouter.post('/auth/signup', async (req: Request, res: Response) => {
       });
     }
 
+    // Verify chosen display name is provided and unique
+    const cleanName = sanitizeText(displayName || normalizedEmail.split('@')[0], 50);
+    if (!cleanName || cleanName.length < 2) {
+      return res.status(400).json({
+        error: 'VALIDATION_ERROR',
+        message: 'Display name must be at least 2 characters.',
+      });
+    }
+
+    const existingName = await getUserByDisplayName(cleanName);
+    if (existingName) {
+      return res.status(400).json({
+        error: 'USERNAME_TAKEN',
+        message: 'Username already taken. Please choose a different display name.',
+      });
+    }
+
     const passwordHash = await bcrypt.hash(password, 10);
     const uid = `usr_${crypto.randomUUID().replace(/-/g, '').slice(0, 16)}`;
-    const cleanName = sanitizeText(displayName || normalizedEmail.split('@')[0], 50);
     const cleanBirthday = birthday && /^\d{4}-\d{2}-\d{2}$/.test(birthday) ? birthday : '1998-05-15';
     const cleanGender = gender ? sanitizeText(gender, 30) : 'prefer-not-to-say';
     const cleanRealName = realName ? sanitizeText(realName, 80) : undefined;
@@ -174,23 +200,106 @@ apiRouter.post('/auth/login', async (req: Request, res: Response) => {
   }
 });
 
-// Password reset request
+// Password reset request: Generates 6-digit recovery code
 apiRouter.post('/auth/request-password-reset', async (req: Request, res: Response) => {
   try {
     const { email } = req.body;
-    if (!email) {
-      return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Email is required' });
+    if (!email || typeof email !== 'string' || !email.includes('@')) {
+      return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Please provide a valid account email.' });
     }
-    const dbUser = await getUserByEmail(email);
-    // Always return success to prevent email enumeration
+
+    const normalizedEmail = email.trim().toLowerCase();
+    const dbUser = await getUserByEmail(normalizedEmail);
+    if (!dbUser) {
+      return res.status(404).json({
+        error: 'USER_NOT_FOUND',
+        message: 'No account was found with this email address. Please check your spelling or sign up.',
+      });
+    }
+
+    // Generate secure 6-digit recovery code (15 minutes validity)
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = Date.now() + 15 * 60 * 1000;
+    passwordResetCodes.set(normalizedEmail, { code, email: normalizedEmail, expiresAt });
+
+    // Send in-app notification to the user
+    try {
+  await createNotification({
+    recipientUid: dbUser.uid,
+    type: 'security_alert',
+    title: '🔑 Password Recovery Code',
+    message: `Your 6-digit password recovery code is: ${code}. It expires in 15 minutes.`,
+  });
+} catch {
+  // ignore
+}
+
     return res.json({
       success: true,
-      message: dbUser
-        ? 'Password reset instructions have been dispatched.'
-        : 'If an account exists with this email, instructions have been dispatched.',
+      message: 'Password reset code has been generated.',
+      previewCode: code, // Supplied for preview testing so users can test immediately
     });
   } catch (error: any) {
     return res.status(500).json({ error: error.message || 'Reset request failed' });
+  }
+});
+
+// Complete Password Reset with 6-digit Code & New Password
+apiRouter.post('/auth/reset-password', async (req: Request, res: Response) => {
+  try {
+    const { email, code, newPassword } = req.body;
+    if (!email || !code || !newPassword) {
+      return res.status(400).json({
+        error: 'VALIDATION_ERROR',
+        message: 'Email, 6-digit recovery code, and new password are required.',
+      });
+    }
+    if (typeof newPassword !== 'string' || newPassword.length < 6) {
+      return res.status(400).json({
+        error: 'VALIDATION_ERROR',
+        message: 'New password must be at least 6 characters.',
+      });
+    }
+
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const record = passwordResetCodes.get(normalizedEmail);
+
+    if (!record || record.code !== String(code).trim() || Date.now() > record.expiresAt) {
+      return res.status(400).json({
+        error: 'INVALID_CODE',
+        message: 'Invalid or expired recovery code. Please request a fresh 6-digit code.',
+      });
+    }
+
+    const dbUser = await getUserByEmail(normalizedEmail);
+    if (!dbUser) {
+      return res.status(404).json({ error: 'USER_NOT_FOUND', message: 'User account not found.' });
+    }
+
+    const newHash = await bcrypt.hash(newPassword, 10);
+    const updated = await updateUserPassword(dbUser.uid, newHash);
+    passwordResetCodes.delete(normalizedEmail);
+
+    try {
+  await createNotification({
+    recipientUid: dbUser.uid,
+    type: 'security_alert',
+    title: '🛡️ Password Successfully Changed',
+    message: 'Your account password was successfully updated. You can now use your new password.',
+  });
+} catch {
+  // ignore
+}
+    const token = generateAuthToken({ uid: dbUser.uid, email: dbUser.email, displayName: dbUser.displayName });
+    return res.json({
+      success: true,
+      message: 'Password successfully updated! You are now signed in.',
+      token,
+      user: toPrivateUserFromDb(updated || dbUser),
+    });
+  } catch (error: any) {
+    console.error('Failed to reset password:', error);
+    return res.status(500).json({ error: error.message || 'Failed to update password' });
   }
 });
 
@@ -260,6 +369,15 @@ apiRouter.patch('/users/me', optionalAuth, async (req: AuthRequest, res: Respons
     }
 
     const cleanName = displayName ? sanitizeText(displayName, 50) : undefined;
+    if (cleanName && cleanName.toLowerCase() !== currentUser.displayName.toLowerCase()) {
+      const existingName = await getUserByDisplayName(cleanName);
+      if (existingName && existingName.uid !== currentUser.uid) {
+        return res.status(400).json({
+          error: 'USERNAME_TAKEN',
+          message: 'Username already taken. Please choose a different display name.',
+        });
+      }
+    }
     const cleanBirthday = birthday && /^\d{4}-\d{2}-\d{2}$/.test(birthday) ? birthday : undefined;
 
     const updated = await updateUserProfile(uid, {

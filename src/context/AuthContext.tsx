@@ -20,7 +20,8 @@ interface AuthContextType {
     birthday: string;
     gender: string;
   }) => Promise<void>;
-  sendPasswordReset: (email: string) => Promise<void>;
+  sendPasswordReset: (email: string) => Promise<{ success: boolean; message: string; previewCode?: string }>;
+  completePasswordReset: (params: { email: string; code: string; newPassword: string }) => Promise<void>;
   updateUser: (user: PrivateUser) => void;
   setSimulatedDate: (date: string) => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -132,7 +133,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const sendPasswordReset = async (email: string) => {
-    await api.requestPasswordReset(email.trim());
+    return await api.requestPasswordReset(email.trim());
+  };
+
+  const completePasswordReset = async (params: { email: string; code: string; newPassword: string }) => {
+    try {
+      setIsLoading(true);
+      const res = await api.resetPassword(params);
+      api.setToken(res.token);
+      setUser(res.user);
+      closeAuthModal();
+    } catch (err: any) {
+      console.error('Reset password failed:', err);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const login = (token: string, newUser: PrivateUser) => {
@@ -195,6 +211,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         signInWithEmail,
         signUpWithEmail,
         sendPasswordReset,
+        completePasswordReset,
         updateUser,
         setSimulatedDate,
         refreshUser,
