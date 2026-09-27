@@ -3,8 +3,9 @@ import { boolean, integer, pgTable, serial, text, timestamp } from 'drizzle-orm/
 
 export const users = pgTable('users', {
   id: serial('id').primaryKey(),
-  uid: text('uid').notNull().unique(), // Firebase Auth UID
-  email: text('email').notNull(),
+  uid: text('uid').notNull().unique(), // Unique user account ID
+  email: text('email').notNull().unique(),
+  passwordHash: text('password_hash'), // Hashed password for direct Neon DB auth
   displayName: text('display_name').notNull(),
   gender: text('gender').notNull().default('prefer-not-to-say'),
   birthday: text('birthday').notNull().default('1995-09-24'), // YYYY-MM-DD

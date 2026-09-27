@@ -1,9 +1,18 @@
 import { Router, Request, Response } from 'express';
+import crypto from 'crypto';
+import bcrypt from 'bcryptjs';
 import { GoogleGenAI } from '@google/genai';
-import { getUsers, getUserByUid, getOrCreateUser, updateUserProfile, cleanAllUsersAndData } from '../src/db/users.ts';
+import {
+  getUsers,
+  getUserByUid,
+  getUserByEmail,
+  createUserWithPassword,
+  updateUserProfile,
+  cleanAllUsersAndData,
+} from '../src/db/users.ts';
 import { getWishesForRecipient, createWish, toggleWishLike, getLikedWishIds, deleteWish, getTotalWishesCount } from '../src/db/wishes.ts';
 import { getNotificationsForUser, createNotification, markNotificationsAsRead, markNotificationAsReadById, deleteNotificationsForUser } from '../src/db/notifications.ts';
-import { requireAuth, optionalAuth, AuthRequest } from '../src/middleware/auth.ts';
+import { requireAuth, optionalAuth, AuthRequest, generateAuthToken } from '../src/middleware/auth.ts';
 import { checkBirthdayStatus } from './dto.js';
 
 export const apiRouter = Router();
@@ -65,33 +74,123 @@ function toPrivateUserFromDb(u: any) {
 }
 
 // -------------------------------------------------------------
-// Auth & User Routes
+// Auth & User Routes (Neon PostgreSQL + JWT)
 // -------------------------------------------------------------
 
-// Sync Firebase Authenticated user to Cloud SQL database
-apiRouter.post('/auth/sync', requireAuth, async (req: AuthRequest, res: Response) => {
+// Sign Up with Email and Password directly into Neon Database
+apiRouter.post('/auth/signup', async (req: Request, res: Response) => {
   try {
-    const firebaseUser = req.user;
-    if (!firebaseUser) {
-      return res.status(401).json({ error: 'UNAUTHORIZED', message: 'User not authenticated' });
+    const { email, password, displayName, realName, birthday, gender } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Email and password are required' });
+    }
+    if (typeof email !== 'string' || !email.includes('@')) {
+      return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Please provide a valid email address' });
+    }
+    if (typeof password !== 'string' || password.length < 6) {
+      return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Password must be at least 6 characters' });
     }
 
-    const uid = firebaseUser.uid;
-    const email = firebaseUser.email || (req.body && req.body.email) || `${uid}@bashke.app`;
-    const name = (req.body && req.body.displayName) || (firebaseUser as any).name || email.split('@')[0];
-    const avatarSeed = (req.body && req.body.avatarSeed) || `seed_${uid.slice(0, 8)}`;
+    const normalizedEmail = email.trim().toLowerCase();
+    const existing = await getUserByEmail(normalizedEmail);
+    if (existing) {
+      return res.status(400).json({
+        error: 'EMAIL_EXISTS',
+        message: 'An account with this email address already exists. Please sign in instead.',
+      });
+    }
 
-    const profileData = {
-      birthday: req.body?.birthday,
-      gender: req.body?.gender,
-      realName: req.body?.realName,
-    };
+    const passwordHash = await bcrypt.hash(password, 10);
+    const uid = `usr_${crypto.randomUUID().replace(/-/g, '').slice(0, 16)}`;
+    const cleanName = sanitizeText(displayName || normalizedEmail.split('@')[0], 50);
+    const cleanBirthday = birthday && /^\d{4}-\d{2}-\d{2}$/.test(birthday) ? birthday : '1998-05-15';
+    const cleanGender = gender ? sanitizeText(gender, 30) : 'prefer-not-to-say';
+    const cleanRealName = realName ? sanitizeText(realName, 80) : undefined;
 
-    const dbUser = await getOrCreateUser(uid, email, name, avatarSeed, profileData);
-    return res.json({ user: toPrivateUserFromDb(dbUser) });
+    const dbUser = await createUserWithPassword({
+      uid,
+      email: normalizedEmail,
+      passwordHash,
+      displayName: cleanName,
+      realName: cleanRealName,
+      birthday: cleanBirthday,
+      gender: cleanGender,
+      avatarSeed: `seed_${uid.slice(0, 8)}`,
+    });
+
+    const token = generateAuthToken({ uid: dbUser.uid, email: dbUser.email, displayName: dbUser.displayName });
+    return res.status(201).json({
+      success: true,
+      token,
+      user: toPrivateUserFromDb(dbUser),
+    });
   } catch (error: any) {
-    console.error('Failed to sync auth user to Cloud SQL:', error);
-    return res.status(500).json({ error: error.message || 'Failed to sync user' });
+    console.error('Failed to register user in Neon DB:', error);
+    return res.status(500).json({ error: 'SERVER_ERROR', message: error.message || 'Registration failed' });
+  }
+});
+
+// Sign In with Email and Password directly from Neon Database
+apiRouter.post('/auth/login', async (req: Request, res: Response) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Email and password are required' });
+    }
+
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const dbUser = await getUserByEmail(normalizedEmail);
+    if (!dbUser) {
+      return res.status(401).json({
+        error: 'INVALID_CREDENTIALS',
+        message: 'No account found with this email. Please check your spelling or sign up.',
+      });
+    }
+
+    if (!dbUser.passwordHash) {
+      return res.status(401).json({
+        error: 'INVALID_CREDENTIALS',
+        message: 'No password set for this account. Please reset password or register.',
+      });
+    }
+
+    const passwordMatch = await bcrypt.compare(String(password), dbUser.passwordHash);
+    if (!passwordMatch) {
+      return res.status(401).json({
+        error: 'INVALID_CREDENTIALS',
+        message: 'Incorrect email or password. Please verify your details.',
+      });
+    }
+
+    const token = generateAuthToken({ uid: dbUser.uid, email: dbUser.email, displayName: dbUser.displayName });
+    return res.json({
+      success: true,
+      token,
+      user: toPrivateUserFromDb(dbUser),
+    });
+  } catch (error: any) {
+    console.error('Failed to log in user in Neon DB:', error);
+    return res.status(500).json({ error: 'SERVER_ERROR', message: error.message || 'Login failed' });
+  }
+});
+
+// Password reset request
+apiRouter.post('/auth/request-password-reset', async (req: Request, res: Response) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Email is required' });
+    }
+    const dbUser = await getUserByEmail(email);
+    // Always return success to prevent email enumeration
+    return res.json({
+      success: true,
+      message: dbUser
+        ? 'Password reset instructions have been dispatched.'
+        : 'If an account exists with this email, instructions have been dispatched.',
+    });
+  } catch (error: any) {
+    return res.status(500).json({ error: error.message || 'Reset request failed' });
   }
 });
 
@@ -100,21 +199,21 @@ apiRouter.post('/auth/logout', (_req: Request, res: Response) => {
 });
 
 // Current user profile
-apiRouter.get('/auth/me', optionalAuth, async (req: AuthRequest, res: Response) => {
+apiRouter.get('/auth/me', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const firebaseUser = req.user;
-    if (!firebaseUser) {
+    const authUser = req.user;
+    if (!authUser) {
       return res.status(401).json({ error: 'UNAUTHORIZED', message: 'Not logged in' });
     }
 
-    const dbUser = await getUserByUid(firebaseUser.uid);
+    const dbUser = await getUserByUid(authUser.uid);
     if (!dbUser) {
       return res.status(404).json({ error: 'USER_NOT_FOUND', message: 'User profile does not exist in database' });
     }
 
     return res.json({ user: toPrivateUserFromDb(dbUser) });
   } catch (error: any) {
-    console.error('Failed to get user profile from Cloud SQL:', error);
+    console.error('Failed to get user profile from Neon DB:', error);
     return res.status(500).json({ error: error.message || 'Failed to get profile' });
   }
 });

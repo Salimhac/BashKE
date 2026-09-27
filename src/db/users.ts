@@ -101,6 +101,54 @@ export async function getUserByUid(uid: string) {
   }
 }
 
+export async function getUserByEmail(email: string) {
+  try {
+    const normalized = email.toLowerCase().trim();
+    const result = await db.select().from(users).where(eq(users.email, normalized)).limit(1);
+    return result[0] || null;
+  } catch (error) {
+    console.error('Error in getUserByEmail:', error);
+    throw new Error('Database operation failed. Could not fetch user by email.', { cause: error });
+  }
+}
+
+export async function createUserWithPassword(params: {
+  uid: string;
+  email: string;
+  passwordHash: string;
+  displayName: string;
+  realName?: string;
+  birthday?: string;
+  gender?: string;
+  avatarSeed?: string;
+}) {
+  try {
+    const normalizedEmail = params.email.toLowerCase().trim();
+    const fallbackSeed = params.avatarSeed || `seed_${params.uid.slice(0, 8)}`;
+    const userBirthday = params.birthday || '1998-05-15';
+    const userGender = params.gender || 'prefer-not-to-say';
+
+    const result = await db.insert(users)
+      .values({
+        uid: params.uid,
+        email: normalizedEmail,
+        passwordHash: params.passwordHash,
+        displayName: params.displayName,
+        avatarSeed: fallbackSeed,
+        birthday: userBirthday,
+        gender: userGender,
+        realName: params.realName || null,
+        isEmailVerified: true,
+      })
+      .returning();
+
+    return result[0];
+  } catch (error) {
+    console.error('Error in createUserWithPassword:', error);
+    throw new Error('Database operation failed. Could not create account.', { cause: error });
+  }
+}
+
 export async function updateUserProfile(
   uid: string,
   data: { displayName?: string; avatarSeed?: string; gender?: string; birthday?: string }

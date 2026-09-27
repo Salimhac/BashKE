@@ -1,15 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import {
-  signOut,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  updateProfile,
-  sendPasswordResetEmail,
-  onAuthStateChanged,
-} from 'firebase/auth';
 import type { PrivateUser, InAppNotification } from '../types';
 import { api } from '../api';
-import { auth } from '../lib/firebase.ts';
 
 interface AuthContextType {
   user: PrivateUser | null;
@@ -83,40 +74,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [user]);
 
-  // Listen to Firebase Auth state to guarantee zero cross-account leakage
+  // Load user session on mount directly from database via JWT token
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
-      if (fbUser) {
-        try {
-          const idToken = await fbUser.getIdToken();
-          api.setToken(idToken);
-          const data = await api.getMe();
-          if (data && data.user) {
-            setUser(data.user);
-          } else {
-            // User record does not exist in database (e.g. database was cleaned/reset)
-            // Sign out of Firebase Auth to ensure a clean slate
-            await signOut(auth).catch(() => {});
-            api.setToken(null);
-            setUser(null);
-          }
-        } catch {
-          // If profile does not exist in DB (404), sign out and start completely clean
-          await signOut(auth).catch(() => {});
-          api.setToken(null);
-          setUser(null);
-        }
-      } else {
-        // Logged out
-        api.setToken(null);
-        setUser(null);
-        setNotifications([]);
-      }
-      setIsLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, []);
+    refreshUser();
+  }, [refreshUser]);
 
   useEffect(() => {
     if (user) {
@@ -129,14 +90,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signInWithEmail = async (email: string, pass: string) => {
     try {
       setIsLoading(true);
-      const cred = await signInWithEmailAndPassword(auth, email.trim(), pass);
-      const idToken = await cred.user.getIdToken(true);
-      api.setToken(idToken);
-      const res = await api.syncFirebaseAuth(idToken);
+      const res = await api.login({ email: email.trim(), password: pass });
+      api.setToken(res.token);
       setUser(res.user);
       closeAuthModal();
     } catch (err: any) {
-      console.error('Email Sign-In failed:', err);
+      console.error('Sign-In failed:', err);
       throw err;
     } finally {
       setIsLoading(false);
@@ -153,20 +112,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }) => {
     try {
       setIsLoading(true);
-      const cred = await createUserWithEmailAndPassword(auth, params.email.trim(), params.password);
-      await updateProfile(cred.user, { displayName: params.displayName.trim() }).catch(() => {});
-      const idToken = await cred.user.getIdToken(true);
-      api.setToken(idToken);
-      const res = await api.syncFirebaseAuth(idToken, {
+      const res = await api.signup({
+        email: params.email.trim(),
+        password: params.password,
         displayName: params.displayName.trim(),
         realName: params.realName.trim(),
         birthday: params.birthday,
         gender: params.gender,
       });
+      api.setToken(res.token);
       setUser(res.user);
       closeAuthModal();
     } catch (err: any) {
-      console.error('Email Signup failed:', err);
+      console.error('Signup failed:', err);
       throw err;
     } finally {
       setIsLoading(false);
@@ -174,7 +132,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const sendPasswordReset = async (email: string) => {
-    await sendPasswordResetEmail(auth, email.trim());
+    await api.requestPasswordReset(email.trim());
   };
 
   const login = (token: string, newUser: PrivateUser) => {
@@ -185,7 +143,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = async () => {
     try {
-      await signOut(auth).catch(() => {});
       await api.logout().catch(() => {});
     } finally {
       api.setToken(null);
@@ -197,7 +154,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const cleanAllUsersAndStartFresh = async () => {
     try {
       await api.cleanAllUsers();
-      await signOut(auth).catch(() => {});
     } finally {
       api.setToken(null);
       setUser(null);

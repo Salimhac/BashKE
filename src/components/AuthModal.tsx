@@ -5,33 +5,27 @@ import { X, Lock, ShieldCheck, Mail, Key, User, Calendar, Sparkles, AlertCircle,
 
 function formatFriendlyAuthError(err: any): string {
   if (!err) return 'An unexpected error occurred. Please try again.';
-  const msg = typeof err === 'string' ? err : err.message || err.code || '';
+  const msg = typeof err === 'string' ? err : err.message || err.error || '';
 
-  if (msg.includes('auth/network-request-failed')) {
-    return 'Unable to reach the authentication service. Please check your internet connection.';
-  }
-  if (msg.includes('auth/email-already-in-use') || msg.includes('EMAIL_EXISTS')) {
+  if (msg.includes('EMAIL_EXISTS') || msg.includes('already exists') || msg.includes('email-already-in-use')) {
     return 'An account with this email address already exists. Please sign in instead.';
   }
-  if (msg.includes('auth/wrong-password') || msg.includes('auth/invalid-credential') || msg.includes('INVALID_CREDENTIALS')) {
+  if (msg.includes('INVALID_CREDENTIALS') || msg.includes('Incorrect password') || msg.includes('wrong-password') || msg.includes('Incorrect email or password')) {
     return 'Incorrect email or password. Please verify your details.';
   }
-  if (msg.includes('auth/user-not-found') || msg.includes('USER_NOT_FOUND')) {
-    return 'No account was found with that email address. Please double-check or create a new account.';
+  if (msg.includes('No account found') || msg.includes('USER_NOT_FOUND') || msg.includes('user-not-found')) {
+    return 'No account was found with that email address. Please click "Create one now" below.';
   }
-  if (msg.includes('auth/weak-password')) {
-    return 'Please choose a stronger password (at least 6 characters).';
+  if (msg.includes('Password must be at least') || msg.includes('weak-password')) {
+    return 'Please choose a password with at least 6 characters.';
   }
-  if (msg.includes('auth/invalid-email')) {
+  if (msg.includes('valid email')) {
     return 'Please enter a valid email address.';
   }
-  if (msg.includes('auth/too-many-requests')) {
-    return 'Too many sign-in attempts. Please wait a moment before trying again.';
+  if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('ECONNREFUSED')) {
+    return 'Could not connect to the database server. Please check your connection and try again.';
   }
-  if (msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
-    return 'Could not connect to the server. Please check your connection and try again.';
-  }
-  return msg.replace(/^Firebase:\s*Error\s*\(([^)]+)\)\.?/i, 'Unable to complete sign-in. Please try again.');
+  return msg;
 }
 
 interface AuthModalProps {
@@ -137,7 +131,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, mode, onClose, onS
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-xl text-stone-400 hover:text-stone-700 hover:bg-stone-200/60 transition-colors"
+            className="p-1.5 rounded-xl text-stone-400 hover:text-stone-700 hover:bg-stone-200/60 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -163,121 +157,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, mode, onClose, onS
           {mode === 'login' && (
             <div className="space-y-3.5">
               <form onSubmit={handleLogin} className="space-y-3.5">
-              <div>
-                <label className="block text-xs font-medium text-stone-700 mb-1">Email Address</label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="name@example.com"
-                  className="w-full text-xs p-2.5 rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
-                  required
-                />
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-medium text-stone-700">Password</label>
-                  <button
-                    type="button"
-                    onClick={() => onSwitchMode('reset')}
-                    className="text-[11px] text-amber-800 hover:underline"
-                  >
-                    Forgot password?
-                  </button>
-                </div>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full text-xs p-2.5 rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
-                  required
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full py-2.5 px-4 bg-amber-400 hover:bg-amber-300 text-stone-900 text-xs font-semibold rounded-xl shadow-xs transition-colors mt-2"
-              >
-                {loading ? 'Signing in...' : 'Sign In to BashKE'}
-              </button>
-
-              <div className="text-center pt-2">
-                <span className="text-xs text-stone-500">Don't have an account yet? </span>
-                <button
-                  type="button"
-                  onClick={() => onSwitchMode('signup')}
-                  className="text-xs font-medium text-amber-800 hover:underline"
-                >
-                  Create one now
-                </button>
-              </div>
-            </form>
-          </div>
-          )}
-
-          {/* SIGNUP FORM */}
-          {mode === 'signup' && (
-            <div className="space-y-3.5">
-              <form onSubmit={handleSignup} className="space-y-3.5">
-              {/* Privacy Notice Box */}
-              <div className="p-3 bg-stone-100 rounded-xl text-xs text-stone-600 flex items-start gap-2.5 border border-stone-200">
-                <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                <div className="text-[11px] leading-relaxed">
-                  <span className="font-semibold text-stone-800">Strict Anonymity Rule:</span> Real name,
-                  birthday, and gender are permanently locked after creation. Your real name is NEVER
-                  shown on any page, wish, or API response.
-                </div>
-              </div>
-
-              {/* Display Name (Public) */}
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-medium text-stone-700">Display Name (Public)</label>
-                  <span className="text-[10px] text-emerald-700 font-medium">Editable anytime</span>
-                </div>
-                <input
-                  type="text"
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  placeholder="e.g. Stargazer99 or VelvetOrchid"
-                  className="w-full text-xs p-2.5 rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
-                  required
-                />
-              </div>
-
-              {/* Real Name (Private) */}
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-medium text-stone-700">Full Real Name</label>
-                  <span className="text-[10px] text-rose-700 font-medium flex items-center gap-1">
-                    <Lock className="w-3 h-3" />
-                    Strictly Private & Locked
-                  </span>
-                </div>
-                <input
-                  type="text"
-                  value={realName}
-                  onChange={(e) => setRealName(e.target.value)}
-                  placeholder="Stored for legal integrity only — never rendered"
-                  className="w-full text-xs p-2.5 rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
-                  required
-                />
-              </div>
-
-              {/* Birthday and Gender Row (Both Locked permanently) */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-xs font-medium text-stone-700">Birthday</label>
-                    <span className="text-[10px] text-stone-400">Locked permanently</span>
-                  </div>
+                  <label className="block text-xs font-medium text-stone-700 mb-1">Email Address</label>
                   <input
-                    type="date"
-                    value={birthday}
-                    onChange={(e) => setBirthday(e.target.value)}
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="name@example.com"
                     className="w-full text-xs p-2.5 rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
                     required
                   />
@@ -285,70 +171,178 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, mode, onClose, onS
 
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="text-xs font-medium text-stone-700">Gender</label>
-                    <span className="text-[10px] text-stone-400">Locked permanently</span>
+                    <label className="text-xs font-medium text-stone-700">Password</label>
+                    <button
+                      type="button"
+                      onClick={() => onSwitchMode('reset')}
+                      className="text-[11px] text-amber-800 hover:underline cursor-pointer"
+                    >
+                      Forgot password?
+                    </button>
                   </div>
-                  <select
-                    value={gender}
-                    onChange={(e: any) => setGender(e.target.value)}
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
                     className="w-full text-xs p-2.5 rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
-                  >
-                    <option value="female">Female</option>
-                    <option value="male">Male</option>
-                    <option value="non-binary">Non-Binary</option>
-                    <option value="prefer-not-to-say">Prefer not to say</option>
-                    <option value="other">Other</option>
-                  </select>
+                    required
+                  />
                 </div>
-              </div>
 
-              {/* Email (Private) */}
-              <div>
-                <label className="block text-xs font-medium text-stone-700 mb-1">Email (Private)</label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@example.com"
-                  className="w-full text-xs p-2.5 rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
-                  required
-                />
-              </div>
-
-              {/* Password */}
-              <div>
-                <label className="block text-xs font-medium text-stone-700 mb-1">Password (min 8 chars)</label>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  minLength={8}
-                  className="w-full text-xs p-2.5 rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
-                  required
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full py-2.5 px-4 bg-amber-400 hover:bg-amber-300 text-stone-900 text-xs font-semibold rounded-xl shadow-xs transition-colors mt-2"
-              >
-                {loading ? 'Creating secure account...' : 'Create Anonymous Account'}
-              </button>
-
-              <div className="text-center pt-2">
-                <span className="text-xs text-stone-500">Already registered? </span>
                 <button
-                  type="button"
-                  onClick={() => onSwitchMode('login')}
-                  className="text-xs font-medium text-amber-800 hover:underline"
+                  type="submit"
+                  disabled={loading}
+                  className="w-full py-2.5 px-4 bg-amber-400 hover:bg-amber-300 text-stone-900 text-xs font-semibold rounded-xl shadow-xs transition-colors mt-2 cursor-pointer disabled:opacity-60"
                 >
-                  Sign in here
+                  {loading ? 'Signing in...' : 'Sign In to BashKE'}
                 </button>
-              </div>
-            </form>
-          </div>
+
+                <div className="text-center pt-2">
+                  <span className="text-xs text-stone-500">Don't have an account yet? </span>
+                  <button
+                    type="button"
+                    onClick={() => onSwitchMode('signup')}
+                    className="text-xs font-medium text-amber-800 hover:underline cursor-pointer"
+                  >
+                    Create one now
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* SIGNUP FORM */}
+          {mode === 'signup' && (
+            <div className="space-y-3.5">
+              <form onSubmit={handleSignup} className="space-y-3.5">
+                {/* Privacy Notice Box */}
+                <div className="p-3 bg-stone-100 rounded-xl text-xs text-stone-600 flex items-start gap-2.5 border border-stone-200">
+                  <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <div className="text-[11px] leading-relaxed">
+                    <span className="font-semibold text-stone-800">Strict Anonymity Rule:</span> Real name,
+                    birthday, and gender are permanently locked after creation. Your real name is NEVER
+                    shown on any page, wish, or API response.
+                  </div>
+                </div>
+
+                {/* Display Name (Public) */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-medium text-stone-700">Display Name (Public)</label>
+                    <span className="text-[10px] text-emerald-700 font-medium">Editable anytime</span>
+                  </div>
+                  <input
+                    type="text"
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    placeholder="e.g. Stargazer99 or VelvetOrchid"
+                    className="w-full text-xs p-2.5 rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
+                    required
+                  />
+                </div>
+
+                {/* Real Name (Private) */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-medium text-stone-700">Full Real Name</label>
+                    <span className="text-[10px] text-rose-700 font-medium flex items-center gap-1">
+                      <Lock className="w-3 h-3" />
+                      Strictly Private & Locked
+                    </span>
+                  </div>
+                  <input
+                    type="text"
+                    value={realName}
+                    onChange={(e) => setRealName(e.target.value)}
+                    placeholder="Stored for legal integrity only — never rendered"
+                    className="w-full text-xs p-2.5 rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
+                    required
+                  />
+                </div>
+
+                {/* Birthday and Gender Row */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-medium text-stone-700">Birthday</label>
+                      <span className="text-[10px] text-stone-400">Locked permanently</span>
+                    </div>
+                    <input
+                      type="date"
+                      value={birthday}
+                      onChange={(e) => setBirthday(e.target.value)}
+                      className="w-full text-xs p-2.5 rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-medium text-stone-700">Gender</label>
+                      <span className="text-[10px] text-stone-400">Locked permanently</span>
+                    </div>
+                    <select
+                      value={gender}
+                      onChange={(e: any) => setGender(e.target.value)}
+                      className="w-full text-xs p-2.5 rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
+                    >
+                      <option value="female">Female</option>
+                      <option value="male">Male</option>
+                      <option value="non-binary">Non-Binary</option>
+                      <option value="prefer-not-to-say">Prefer not to say</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Email (Private) */}
+                <div>
+                  <label className="block text-xs font-medium text-stone-700 mb-1">Email (Private)</label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="you@example.com"
+                    className="w-full text-xs p-2.5 rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
+                    required
+                  />
+                </div>
+
+                {/* Password */}
+                <div>
+                  <label className="block text-xs font-medium text-stone-700 mb-1">Password (min 6 chars)</label>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    minLength={6}
+                    className="w-full text-xs p-2.5 rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
+                    required
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full py-2.5 px-4 bg-amber-400 hover:bg-amber-300 text-stone-900 text-xs font-semibold rounded-xl shadow-xs transition-colors mt-2 cursor-pointer disabled:opacity-60"
+                >
+                  {loading ? 'Creating secure account...' : 'Create Anonymous Account'}
+                </button>
+
+                <div className="text-center pt-2">
+                  <span className="text-xs text-stone-500">Already registered? </span>
+                  <button
+                    type="button"
+                    onClick={() => onSwitchMode('login')}
+                    className="text-xs font-medium text-amber-800 hover:underline cursor-pointer"
+                  >
+                    Sign in here
+                  </button>
+                </div>
+              </form>
+            </div>
           )}
 
           {/* PASSWORD RESET FLOW */}
@@ -375,23 +369,23 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, mode, onClose, onS
                     required
                   />
                   <p className="text-[11px] text-stone-500 mt-1">
-                    We will send a secure password reset link directly to your inbox.
+                    Password reset instructions will be dispatched to your account.
                   </p>
                 </div>
 
                 <button
                   type="submit"
                   disabled={loading || !email}
-                  className="w-full py-2.5 px-4 bg-amber-400 hover:bg-amber-300 text-stone-900 text-xs font-semibold rounded-xl shadow-xs transition-colors"
+                  className="w-full py-2.5 px-4 bg-amber-400 hover:bg-amber-300 text-stone-900 text-xs font-semibold rounded-xl shadow-xs transition-colors cursor-pointer"
                 >
-                  {loading ? 'Sending link...' : 'Send Password Reset Link'}
+                  {loading ? 'Sending link...' : 'Send Password Reset Request'}
                 </button>
 
                 <div className="text-center pt-2">
                   <button
                     type="button"
                     onClick={() => onSwitchMode('login')}
-                    className="text-xs text-stone-500 hover:text-stone-800 hover:underline"
+                    className="text-xs text-stone-500 hover:text-stone-800 hover:underline cursor-pointer"
                   >
                     Back to Sign In
                   </button>

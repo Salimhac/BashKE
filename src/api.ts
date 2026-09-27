@@ -103,27 +103,6 @@ export const api = {
   },
 
   // Auth
-  async syncFirebaseAuth(
-    idToken: string,
-    profileData?: {
-      displayName?: string;
-      realName?: string;
-      birthday?: string;
-      gender?: string;
-      avatarSeed?: string;
-    }
-  ) {
-    this.setToken(idToken);
-    const res = await this.request<{ user: PrivateUser }>('/auth/sync', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${idToken}`,
-      },
-      body: JSON.stringify(profileData || {}),
-    });
-    return res;
-  },
-
   async signup(payload: {
     email: string;
     password: string;
