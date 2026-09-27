@@ -7,10 +7,11 @@ import { triggerConfetti } from '../utils/confetti';
 import {
   playCelebrationChime,
   playWaxSealClick,
-  KENYAN_BASH_TRACKS,
-  playBashTrackMelody,
-  stopBashTrackMelody,
+  BIRTHDAY_SONGS,
+  findBirthdaySong,
+  type BirthdaySong,
 } from '../utils/sound';
+import { YouTubeMusicPlayer } from './YoutubeMusicPlayer';
 import {
   X,
   Trash2,
@@ -28,6 +29,8 @@ import {
   Play,
   Square,
   Volume2,
+  Youtube,
+  ExternalLink,
 } from 'lucide-react';
 
 interface WishBoardModalProps {
@@ -117,7 +120,10 @@ export const WishBoardModal: React.FC<WishBoardModalProps> = ({
   const [selectedSeal, setSelectedSeal] = useState('🎂');
   const [selectedTrackId, setSelectedTrackId] = useState<string | null>(null);
   const [previewingTrackId, setPreviewingTrackId] = useState<string | null>(null);
-  const [playingTrackWishId, setPlayingTrackWishId] = useState<string | null>(null);
+  const [activeJukeboxSong, setActiveJukeboxSong] = useState<BirthdaySong | null>(null);
+  const [isJukeboxPlaying, setIsJukeboxPlaying] = useState(false);
+  const [activeJukeboxWishId, setActiveJukeboxWishId] = useState<string | null>(null);
+  const [activeJukeboxSender, setActiveJukeboxSender] = useState<string | undefined>(undefined);
   const [handleType, setHandleType] = useState<'well_wisher' | 'custom'>('well_wisher');
   const [customAlias, setCustomAlias] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -158,7 +164,10 @@ export const WishBoardModal: React.FC<WishBoardModalProps> = ({
   };
 
   const handleClose = () => {
-    stopBashTrackMelody();
+    setIsJukeboxPlaying(false);
+    setActiveJukeboxSong(null);
+    setActiveJukeboxWishId(null);
+    setPreviewingTrackId(null);
     onClose();
   };
 
@@ -183,44 +192,51 @@ export const WishBoardModal: React.FC<WishBoardModalProps> = ({
       setSuccessNotice(null);
       setSelectedTrackId(null);
       setPreviewingTrackId(null);
-      setPlayingTrackWishId(null);
+      setActiveJukeboxSong(null);
+      setIsJukeboxPlaying(false);
+      setActiveJukeboxWishId(null);
     } else {
-      stopBashTrackMelody();
+      setIsJukeboxPlaying(false);
+      setActiveJukeboxSong(null);
     }
     return () => {
-      stopBashTrackMelody();
+      setIsJukeboxPlaying(false);
+      setActiveJukeboxSong(null);
     };
   }, [isOpen, fetchBoard]);
 
   if (!isOpen) return null;
 
-  // Music Dedication playback handlers
-  const handleTogglePlayWishTrack = (wishId: string, trackId: string) => {
-    if (playingTrackWishId === wishId) {
-      stopBashTrackMelody();
-      setPlayingTrackWishId(null);
+  // Real YouTube Song playback handlers
+  const handleTogglePlayWishTrack = (wishId: string, trackId: string, senderHandle: string) => {
+    const song = findBirthdaySong(trackId);
+    if (!song) return;
+
+    if (activeJukeboxWishId === wishId && isJukeboxPlaying) {
+      setIsJukeboxPlaying(false);
     } else {
-      stopBashTrackMelody();
+      setActiveJukeboxSong(song);
+      setIsJukeboxPlaying(true);
+      setActiveJukeboxWishId(wishId);
+      setActiveJukeboxSender(senderHandle);
       setPreviewingTrackId(null);
-      setPlayingTrackWishId(wishId);
-      playBashTrackMelody(trackId, () => {
-        setPlayingTrackWishId(null);
-      });
     }
   };
 
   const handleTogglePreviewTrack = (trackId: string) => {
-    if (previewingTrackId === trackId) {
-      stopBashTrackMelody();
+    const song = findBirthdaySong(trackId);
+    if (!song) return;
+
+    if (previewingTrackId === trackId && isJukeboxPlaying) {
+      setIsJukeboxPlaying(false);
       setPreviewingTrackId(null);
     } else {
-      stopBashTrackMelody();
-      setPlayingTrackWishId(null);
-      setPreviewingTrackId(trackId);
       setSelectedTrackId(trackId);
-      playBashTrackMelody(trackId, () => {
-        setPreviewingTrackId(null);
-      });
+      setActiveJukeboxSong(song);
+      setIsJukeboxPlaying(true);
+      setPreviewingTrackId(trackId);
+      setActiveJukeboxWishId(null);
+      setActiveJukeboxSender(undefined);
     }
   };
 
@@ -307,7 +323,8 @@ export const WishBoardModal: React.FC<WishBoardModalProps> = ({
     try {
       setPosting(true);
       setError(null);
-      stopBashTrackMelody();
+      setIsJukeboxPlaying(false);
+      setPreviewingTrackId(null);
 
       const res = await api.postWish(user.id, {
         message: message.trim(),
@@ -606,21 +623,22 @@ export const WishBoardModal: React.FC<WishBoardModalProps> = ({
                   </div>
 
                   {/* -------------------------------------------------------- */}
-                  {/* WISH WITH MUSIC: Dedicated Kenyan Bash Party Anthems     */}
+                  {/* WISH WITH MUSIC: 5 Real Birthday Songs (from YouTube)   */}
                   {/* -------------------------------------------------------- */}
                   <div className="pt-2 border-t border-amber-100 space-y-2">
                     <div className="flex items-center justify-between">
                       <label className="text-[11px] font-bold text-amber-900 uppercase tracking-wider flex items-center gap-1.5">
-                        <Music className="w-3.5 h-3.5 text-red-600 shrink-0" />
-                        <span>Wish With Music (Bash Anthem)</span>
+                        <Youtube className="w-3.5 h-3.5 text-red-600 fill-red-600 shrink-0" />
+                        <span>Wish With Music — 5 Birthday Songs (YouTube)</span>
                       </label>
                       {selectedTrackId && (
                         <button
                           type="button"
                           onClick={() => {
-                            stopBashTrackMelody();
                             setSelectedTrackId(null);
                             setPreviewingTrackId(null);
+                            setIsJukeboxPlaying(false);
+                            setActiveJukeboxSong(null);
                           }}
                           className="text-[10px] text-stone-500 hover:text-red-600 cursor-pointer underline"
                         >
@@ -629,10 +647,10 @@ export const WishBoardModal: React.FC<WishBoardModalProps> = ({
                       )}
                     </div>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
-                      {KENYAN_BASH_TRACKS.map((t) => {
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {BIRTHDAY_SONGS.map((t) => {
                         const isSelected = selectedTrackId === t.id;
-                        const isPreviewing = previewingTrackId === t.id;
+                        const isPreviewing = previewingTrackId === t.id && isJukeboxPlaying;
                         return (
                           <div
                             key={t.id}
@@ -640,26 +658,50 @@ export const WishBoardModal: React.FC<WishBoardModalProps> = ({
                               setSelectedTrackId(t.id);
                               playWaxSealClick();
                             }}
-                            className={`p-2 rounded-xl border text-left cursor-pointer transition-all flex flex-col justify-between ${
+                            className={`p-2.5 rounded-2xl border text-left cursor-pointer transition-all flex items-center gap-3 relative ${
                               isSelected
                                 ? 'bg-amber-100/90 border-amber-500 ring-2 ring-amber-300 shadow-2xs'
                                 : 'bg-[#FAF7F0] hover:bg-amber-50/70 border-amber-200/70 text-stone-800'
                             }`}
                           >
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="text-base">{t.emoji}</span>
+                            {/* YouTube Video Thumbnail */}
+                            <div className="relative w-16 h-12 rounded-xl overflow-hidden bg-stone-900 shrink-0 border border-stone-200">
+                              <img
+                                src={t.thumbnailUrl}
+                                alt={t.title}
+                                className="w-full h-full object-cover"
+                              />
+                              <span className="absolute bottom-0.5 right-1 px-1 py-0.2 bg-black/80 text-[8px] font-mono text-white rounded">
+                                {t.duration}
+                              </span>
+                            </div>
+
+                            {/* Song Info */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1">
+                                <span className="text-xs">{t.emoji}</span>
+                                <p className="text-[11px] font-bold text-stone-900 truncate leading-tight">
+                                  {t.title}
+                                </p>
+                              </div>
+                              <p className="text-[10px] text-stone-600 truncate font-medium">{t.artist}</p>
+                              <p className="text-[9px] text-amber-800/80 truncate">{t.tagline}</p>
+                            </div>
+
+                            {/* Action buttons: Play Preview & Open on YouTube */}
+                            <div className="flex flex-col items-end gap-1 shrink-0">
                               <button
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handleTogglePreviewTrack(t.id);
                                 }}
-                                className={`px-1.5 py-0.5 rounded-md text-[10px] flex items-center gap-1 transition-colors cursor-pointer ${
+                                className={`px-2 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer ${
                                   isPreviewing
-                                    ? 'bg-red-600 text-white font-bold animate-pulse'
-                                    : 'bg-white hover:bg-amber-200 text-amber-950 border border-amber-200'
+                                    ? 'bg-red-600 text-white shadow-xs animate-pulse'
+                                    : 'bg-white hover:bg-amber-200 text-amber-950 border border-amber-300 shadow-2xs'
                                 }`}
-                                title={isPreviewing ? 'Stop track' : 'Listen to melody'}
+                                title={isPreviewing ? 'Stop song' : 'Preview song from YouTube'}
                               >
                                 {isPreviewing ? (
                                   <>
@@ -673,10 +715,18 @@ export const WishBoardModal: React.FC<WishBoardModalProps> = ({
                                   </>
                                 )}
                               </button>
-                            </div>
-                            <div className="min-w-0">
-                              <p className="text-[11px] font-bold text-stone-900 truncate leading-tight">{t.title}</p>
-                              <p className="text-[9px] text-stone-500 truncate">{t.artist}</p>
+
+                              <a
+                                href={t.youtubeUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                className="text-[9px] text-red-600 hover:text-red-800 flex items-center gap-0.5"
+                                title="Watch on YouTube"
+                              >
+                                <Youtube className="w-2.5 h-2.5 fill-current" />
+                                <span>Watch</span>
+                              </a>
                             </div>
                           </div>
                         );
@@ -684,14 +734,17 @@ export const WishBoardModal: React.FC<WishBoardModalProps> = ({
                     </div>
 
                     {selectedTrackId && (
-                      <div className="p-2 rounded-xl bg-amber-50 border border-amber-300/80 flex items-center justify-between text-xs text-amber-950">
-                        <span className="flex items-center gap-1 text-[11px]">
-                          <Volume2 className="w-3.5 h-3.5 text-amber-700" />
+                      <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-300/80 flex items-center justify-between text-xs text-amber-950">
+                        <span className="flex items-center gap-1.5 text-[11px]">
+                          <Youtube className="w-3.5 h-3.5 text-red-600 fill-red-600 shrink-0" />
                           <span>
-                            Attached: <strong>{KENYAN_BASH_TRACKS.find((t) => t.id === selectedTrackId)?.title}</strong>
+                            Attached Song: <strong>{BIRTHDAY_SONGS.find((t) => t.id === selectedTrackId)?.title}</strong> by{' '}
+                            {BIRTHDAY_SONGS.find((t) => t.id === selectedTrackId)?.artist}
                           </span>
                         </span>
-                        <span className="text-[10px] text-emerald-700 font-semibold">Audio dedication active</span>
+                        <span className="text-[10px] text-emerald-700 font-semibold shrink-0">
+                          Plays from YouTube
+                        </span>
                       </div>
                     )}
                   </div>
@@ -880,9 +933,10 @@ export const WishBoardModal: React.FC<WishBoardModalProps> = ({
                   const themeStyle =
                     STATIONERY_THEMES.find((t) => t.id === w.theme) || STATIONERY_THEMES[0];
                   const attachedTrack = w.musicTrack
-                    ? KENYAN_BASH_TRACKS.find((t) => t.id === w.musicTrack)
+                    ? findBirthdaySong(w.musicTrack)
                     : null;
-                  const isTrackPlaying = playingTrackWishId === w.id;
+                  const isTrackPlaying =
+                    isJukeboxPlaying && activeJukeboxWishId === w.id;
 
                   return (
                     <div
@@ -905,45 +959,68 @@ export const WishBoardModal: React.FC<WishBoardModalProps> = ({
 
                         {/* Attached Party Anthem / Music Dedication */}
                         {attachedTrack && (
-                          <div className="mt-3 p-2 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-1.5 min-w-0">
-                              <span className="text-sm shrink-0">{attachedTrack.emoji}</span>
+                          <div className="mt-3 p-2.5 rounded-2xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-between gap-2.5">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <div className="relative w-11 h-11 rounded-lg overflow-hidden shrink-0 bg-stone-900 border border-stone-300">
+                                <img
+                                  src={attachedTrack.thumbnailUrl}
+                                  alt={attachedTrack.title}
+                                  className="w-full h-full object-cover"
+                                />
+                                <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
+                                  <Youtube className="w-4 h-4 text-white fill-red-600" />
+                                </div>
+                              </div>
                               <div className="min-w-0">
-                                <p className="text-[11px] font-bold text-stone-900 truncate leading-tight">
-                                  {attachedTrack.title}
-                                </p>
-                                <p className="text-[9px] text-stone-600 truncate">
+                                <div className="flex items-center gap-1">
+                                  <span className="text-xs shrink-0">{attachedTrack.emoji}</span>
+                                  <p className="text-[11px] font-bold text-stone-900 truncate leading-tight">
+                                    {attachedTrack.title}
+                                  </p>
+                                </div>
+                                <p className="text-[9px] text-stone-600 truncate font-medium">
                                   {attachedTrack.artist}
+                                </p>
+                                <p className="text-[8px] text-red-600 font-semibold uppercase tracking-wider">
+                                  Real YouTube Song
                                 </p>
                               </div>
                             </div>
 
-                            <button
-                              type="button"
-                              onClick={() => handleTogglePlayWishTrack(w.id, attachedTrack.id)}
-                              className={`px-2 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 shrink-0 transition-all cursor-pointer ${
-                                isTrackPlaying
-                                  ? 'bg-red-600 text-white shadow-2xs'
-                                  : 'bg-amber-600 hover:bg-amber-700 text-white shadow-2xs'
-                              }`}
-                              title={isTrackPlaying ? 'Stop music' : 'Play dedication'}
-                            >
-                              {isTrackPlaying ? (
-                                <>
-                                  <div className="flex items-end gap-0.5 h-3">
-                                    <span className="w-0.5 bg-white rounded-full animate-eq-1" />
-                                    <span className="w-0.5 bg-white rounded-full animate-eq-2" />
-                                    <span className="w-0.5 bg-white rounded-full animate-eq-3" />
-                                  </div>
-                                  <span>Stop</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Play className="w-2.5 h-2.5 fill-current" />
-                                  <span>Play Beat</span>
-                                </>
-                              )}
-                            </button>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => handleTogglePlayWishTrack(w.id, attachedTrack.id, w.senderHandle)}
+                                className={`px-2.5 py-1.5 rounded-xl text-[11px] font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                                  isTrackPlaying
+                                    ? 'bg-red-600 text-white shadow-xs animate-pulse'
+                                    : 'bg-amber-600 hover:bg-amber-700 text-white shadow-xs'
+                                }`}
+                                title={isTrackPlaying ? 'Stop music' : 'Play song from YouTube'}
+                              >
+                                {isTrackPlaying ? (
+                                  <>
+                                    <Square className="w-3 h-3 fill-current" />
+                                    <span>Stop</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Play className="w-3 h-3 fill-current" />
+                                    <span>Play Song</span>
+                                  </>
+                                )}
+                              </button>
+
+                              <a
+                                href={attachedTrack.youtubeUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="p-1.5 rounded-xl text-stone-600 hover:text-red-600 hover:bg-black/5 transition-colors cursor-pointer"
+                                title="Open video on YouTube"
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                              </a>
+                            </div>
                           </div>
                         )}
                       </div>
@@ -1009,6 +1086,20 @@ export const WishBoardModal: React.FC<WishBoardModalProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Floating Real YouTube Birthday Music Jukebox */}
+      <YouTubeMusicPlayer
+        song={activeJukeboxSong}
+        isPlaying={isJukeboxPlaying}
+        onClose={() => {
+          setIsJukeboxPlaying(false);
+          setActiveJukeboxSong(null);
+          setActiveJukeboxWishId(null);
+          setPreviewingTrackId(null);
+        }}
+        onTogglePlay={() => setIsJukeboxPlaying(!isJukeboxPlaying)}
+        dedicatedBy={activeJukeboxSender}
+      />
     </div>
   );
 };

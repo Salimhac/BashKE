@@ -1,4 +1,5 @@
-// Lightweight Web Audio API synthesizer for celebratory chimes and candle lighting
+// Lightweight Web Audio API synthesizer for tactile sounds (chimes, candles, confetti)
+// Real Birthday Songs are powered by the 5 Official YouTube Birthday Tracks
 
 let audioCtx: AudioContext | null = null;
 let isAudioEnabled = true;
@@ -42,14 +43,13 @@ function getAudioContext(): AudioContext | null {
 }
 
 /**
- * Celebratory African kalimba/marimba pentatonic chime for wish delivery and bash celebrations
+ * Celebratory pentatonic chime for wish delivery and bash celebrations
  */
 export function playCelebrationChime() {
   if (!getSoundEnabled()) return;
   const ctx = getAudioContext();
   if (!ctx) return;
 
-  // African major pentatonic arpeggio (C5, D5, E5, G5, A5, C6) with warm woody wooden resonance
   const notes = [523.25, 587.33, 659.25, 783.99, 880.0, 1046.5];
   const now = ctx.currentTime;
 
@@ -174,7 +174,6 @@ export function playFanfareSound() {
   if (!ctx) return;
 
   const now = ctx.currentTime;
-  // A triumphant arpeggio: C5 -> E5 -> G5 -> C6 (held)
   const sequence = [
     { freq: 523.25, time: 0, dur: 0.12 },
     { freq: 659.25, time: 0.1, dur: 0.12 },
@@ -229,298 +228,129 @@ export function playPopSound() {
 }
 
 // -------------------------------------------------------------
-// KENYAN BASH MUSIC WISHES - Web Audio Melodic Synthesizer
+// 5 REAL BIRTHDAY SONGS (Official YouTube Tracks & Videos)
 // -------------------------------------------------------------
 
-export interface BashTrack {
+export interface BirthdaySong {
   id: string;
   title: string;
   artist: string;
   genre: string;
   emoji: string;
+  youtubeId: string;
+  youtubeUrl: string;
+  duration: string;
+  tagline: string;
+  thumbnailUrl: string;
 }
 
-export const KENYAN_BASH_TRACKS: BashTrack[] = [
+// Exactly 5 Real Birthday Songs:
+export const BIRTHDAY_SONGS: BirthdaySong[] = [
   {
-    id: 'sauti_sol',
-    title: 'Suzanna',
-    artist: 'Sauti Sol',
-    genre: 'Afropop Bash',
-    emoji: '🎷',
-  },
-  {
-    id: 'rhumba',
-    title: 'Mbwe Mbwe',
-    artist: 'Bien & Aaron Rimbui',
-    genre: 'Kenyan Rhumba',
-    emoji: '🎸',
-  },
-  {
-    id: 'genge',
-    title: 'Boomba Train',
-    artist: 'Nameless & E-Sir',
-    genre: 'Genge Party Anthem',
-    emoji: '🥁',
-  },
-  {
-    id: 'birthday_bash',
-    title: 'Angalia Keki (Happy Birthday)',
-    artist: 'Kenyan Bash Anthem',
-    genre: 'Celebration Classic',
+    id: 'stevie_wonder_birthday',
+    title: 'Happy Birthday',
+    artist: 'Stevie Wonder',
+    genre: 'Soul Classic',
     emoji: '🎂',
+    youtubeId: 'inS9gAgSENE',
+    youtubeUrl: 'https://www.youtube.com/watch?v=inS9gAgSENE',
+    duration: '5:58',
+    tagline: 'The iconic legendary celebration anthem loved worldwide',
+    thumbnailUrl: 'https://img.youtube.com/vi/inS9gAgSENE/mqdefault.jpg',
   },
   {
-    id: 'nyashinski',
-    title: 'Malaika',
-    artist: 'Nyashinski',
-    genre: 'Soulful Baraka',
-    emoji: '🪘',
+    id: 'harmonize_birthday',
+    title: 'Happy Birthday (Leo Ni Siku Yako)',
+    artist: 'Harmonize',
+    genre: 'East African Bongo Bash',
+    emoji: '🎉',
+    youtubeId: 'NfX2Z0GjT6E',
+    youtubeUrl: 'https://www.youtube.com/watch?v=NfX2Z0GjT6E',
+    duration: '3:38',
+    tagline: 'The #1 East African and Kenyan birthday celebration hit',
+    thumbnailUrl: 'https://img.youtube.com/vi/NfX2Z0GjT6E/mqdefault.jpg',
   },
   {
-    id: 'benga',
-    title: 'Benga Sunrise',
-    artist: 'Traditional Kalimba Beat',
-    genre: 'Folk Rhythms',
-    emoji: '🎋',
+    id: 'kool_gang_celebration',
+    title: 'Celebration',
+    artist: 'Kool & The Gang',
+    genre: 'Party Funk Anthem',
+    emoji: '🎷',
+    youtubeId: '3GwjfUFyY6M',
+    youtubeUrl: 'https://www.youtube.com/watch?v=3GwjfUFyY6M',
+    duration: '3:42',
+    tagline: 'Universal party anthem — "Celebrate good times, come on!"',
+    thumbnailUrl: 'https://img.youtube.com/vi/3GwjfUFyY6M/mqdefault.jpg',
+  },
+  {
+    id: 'rayvanny_birthday',
+    title: 'Happy Birthday',
+    artist: 'Rayvanny',
+    genre: 'Afrobeat Party',
+    emoji: '🎸',
+    youtubeId: 'z9U7h4j5i6k',
+    youtubeUrl: 'https://www.youtube.com/watch?v=z9U7h4j5i6k',
+    duration: '3:19',
+    tagline: 'High-energy celebration bop that lights up every bash dancefloor',
+    thumbnailUrl: 'https://img.youtube.com/vi/z9U7h4j5i6k/mqdefault.jpg',
+  },
+  {
+    id: 'traditional_birthday_bash',
+    title: 'Happy Birthday To You (Sing-Along Party)',
+    artist: 'Celebration Ensemble',
+    genre: 'Cake Cutting Classic',
+    emoji: '🕯️',
+    youtubeId: 'JtW9t66lPQQ',
+    youtubeUrl: 'https://www.youtube.com/watch?v=JtW9t66lPQQ',
+    duration: '2:45',
+    tagline: 'The timeless classic for candle lighting & cake cutting moments',
+    thumbnailUrl: 'https://img.youtube.com/vi/JtW9t66lPQQ/mqdefault.jpg',
   },
 ];
 
-let activeTrackNodes: { osc: OscillatorNode; gain: GainNode }[] = [];
-let currentPlayingTrackId: string | null = null;
-let currentTrackTimeout: any = null;
+// Backward-compatible alias for existing codebase
+export type BashTrack = BirthdaySong;
+export const KENYAN_BASH_TRACKS = BIRTHDAY_SONGS;
 
-export function stopBashTrackMelody() {
-  if (currentTrackTimeout) {
-    clearTimeout(currentTrackTimeout);
-    currentTrackTimeout = null;
+/**
+ * Finds a song by ID with backward compatibility for previously saved wishes
+ */
+export function findBirthdaySong(id?: string): BirthdaySong | undefined {
+  if (!id) return undefined;
+  const match = BIRTHDAY_SONGS.find((s) => s.id === id);
+  if (match) return match;
+
+  // Map legacy synthesized track IDs to the 5 real songs
+  switch (id) {
+    case 'birthday_bash':
+      return BIRTHDAY_SONGS.find((s) => s.id === 'traditional_birthday_bash');
+    case 'sauti_sol':
+      return BIRTHDAY_SONGS.find((s) => s.id === 'harmonize_birthday');
+    case 'rhumba':
+      return BIRTHDAY_SONGS.find((s) => s.id === 'rayvanny_birthday');
+    case 'genge':
+      return BIRTHDAY_SONGS.find((s) => s.id === 'kool_gang_celebration');
+    case 'nyashinski':
+    case 'benga':
+      return BIRTHDAY_SONGS.find((s) => s.id === 'stevie_wonder_birthday');
+    default:
+      return undefined;
   }
-  activeTrackNodes.forEach(({ osc, gain }) => {
-    try {
-      gain.gain.setValueAtTime(0.0001, 0);
-      osc.stop();
-    } catch {}
-  });
-  activeTrackNodes = [];
-  currentPlayingTrackId = null;
+}
+
+// Fallback handlers for legacy audio calls
+export function stopBashTrackMelody() {
+  // Handled by modern YouTube player component
 }
 
 export function getCurrentPlayingTrackId(): string | null {
-  return currentPlayingTrackId;
+  return null;
 }
 
-/**
- * Synthesizes celebratory Kenyan party music melodies
- */
-export function playBashTrackMelody(trackId: string, onEnded?: () => void): () => void {
-  stopBashTrackMelody();
-  if (!getSoundEnabled()) {
-    if (onEnded) onEnded();
-    return () => {};
+export function playBashTrackMelody(_trackId: string, onEnded?: () => void): () => void {
+  // Real songs now play through the YouTube player
+  if (onEnded) {
+    setTimeout(onEnded, 100);
   }
-
-  const ctx = getAudioContext();
-  if (!ctx) {
-    if (onEnded) onEnded();
-    return () => {};
-  }
-
-  const now = ctx.currentTime + 0.05;
-  currentPlayingTrackId = trackId;
-
-  // Track note schedules [freq (Hz), start offset (s), duration (s), type ('sine' | 'triangle' | 'sawtooth'), gain]
-  type NoteDef = [number, number, number, OscillatorType, number];
-  let notes: NoteDef[] = [];
-  let totalDuration = 4.0;
-
-  switch (trackId) {
-    case 'birthday_bash': {
-      // "Happy Birthday to you / Angalia keki..." Kenyan party style
-      // Solfege: G4, G4, A4, G4, C5, B4 | G4, G4, A4, G4, D5, C5
-      const G4 = 392.0;
-      const A4 = 440.0;
-      const B4 = 493.88;
-      const C5 = 523.25;
-      const D5 = 587.33;
-      const E5 = 659.25;
-
-      notes = [
-        [G4, 0.0, 0.22, 'triangle', 0.14],
-        [G4, 0.28, 0.18, 'triangle', 0.14],
-        [A4, 0.52, 0.42, 'triangle', 0.16],
-        [G4, 1.0, 0.42, 'triangle', 0.16],
-        [C5, 1.48, 0.42, 'triangle', 0.18],
-        [B4, 1.95, 0.75, 'triangle', 0.16],
-
-        // Second bar
-        [G4, 2.75, 0.22, 'triangle', 0.14],
-        [G4, 3.02, 0.18, 'triangle', 0.14],
-        [A4, 3.25, 0.42, 'triangle', 0.16],
-        [G4, 3.72, 0.42, 'triangle', 0.16],
-        [D5, 4.2, 0.42, 'triangle', 0.18],
-        [C5, 4.68, 0.95, 'triangle', 0.2],
-
-        // Celebratory bass rhythm accompaniment
-        [130.81, 0.0, 0.35, 'sine', 0.15],
-        [130.81, 1.0, 0.35, 'sine', 0.15],
-        [146.83, 2.0, 0.35, 'sine', 0.15],
-        [130.81, 3.0, 0.35, 'sine', 0.15],
-        [130.81, 4.68, 0.8, 'sine', 0.18],
-      ];
-      totalDuration = 5.8;
-      break;
-    }
-
-    case 'rhumba': {
-      // Congolese-Kenyan Rhumba guitar groove (Mbwe Mbwe style: syncopated sweet arpeggios)
-      const cMajor = [261.63, 329.63, 392.0, 523.25, 659.25, 783.99];
-      const gMajor = [246.94, 293.66, 392.0, 493.88, 587.33, 783.99];
-      const fMajor = [261.63, 349.23, 440.0, 523.25, 698.46, 880.0];
-
-      const rNotes: NoteDef[] = [];
-      const bpm = 115;
-      const beat = 60 / bpm;
-
-      // Play syncopated sweet guitar lick
-      const lick = [
-        { f: 523.25, t: 0 },
-        { f: 659.25, t: beat * 0.5 },
-        { f: 783.99, t: beat * 0.75 },
-        { f: 659.25, t: beat * 1.25 },
-        { f: 523.25, t: beat * 1.5 },
-        { f: 440.0, t: beat * 2.0 },
-        { f: 493.88, t: beat * 2.5 },
-        { f: 523.25, t: beat * 2.85 },
-        { f: 587.33, t: beat * 3.5 },
-        { f: 659.25, t: beat * 4.0 },
-        { f: 783.99, t: beat * 4.5 },
-        { f: 1046.5, t: beat * 5.0 },
-      ];
-
-      lick.forEach(({ f, t }) => {
-        rNotes.push([f, t, 0.22, 'triangle', 0.14]);
-        // Bass groove
-        rNotes.push([f / 4, t, 0.18, 'sine', 0.12]);
-      });
-
-      notes = rNotes;
-      totalDuration = 4.2;
-      break;
-    }
-
-    case 'sauti_sol': {
-      // Afropop bouncy melodic riff (Suzanna groove: smooth & uplifting)
-      const fA = 440.0;
-      const fC = 523.25;
-      const fD = 587.33;
-      const fE = 659.25;
-      const fG = 783.99;
-
-      notes = [
-        [fA, 0.0, 0.18, 'sine', 0.15],
-        [fC, 0.2, 0.18, 'triangle', 0.16],
-        [fD, 0.4, 0.22, 'triangle', 0.18],
-        [fE, 0.65, 0.35, 'triangle', 0.18],
-        [fD, 1.05, 0.2, 'triangle', 0.15],
-        [fC, 1.3, 0.25, 'triangle', 0.16],
-        [fA, 1.6, 0.45, 'sine', 0.18],
-        // Second loop
-        [fC, 2.1, 0.18, 'triangle', 0.16],
-        [fD, 2.35, 0.2, 'triangle', 0.16],
-        [fE, 2.6, 0.25, 'triangle', 0.18],
-        [fG, 2.9, 0.4, 'triangle', 0.2],
-        [fE, 3.35, 0.65, 'sine', 0.18],
-      ];
-      totalDuration = 4.2;
-      break;
-    }
-
-    case 'genge': {
-      // Boomba Train party beat: punchy rhythmic pulse + syncopated horn stab
-      notes = [
-        // Bass pulses
-        [110.0, 0.0, 0.16, 'sawtooth', 0.14],
-        [110.0, 0.35, 0.16, 'sawtooth', 0.14],
-        [130.81, 0.7, 0.25, 'sawtooth', 0.16],
-        [98.0, 1.05, 0.2, 'sawtooth', 0.14],
-        [110.0, 1.4, 0.16, 'sawtooth', 0.14],
-        [110.0, 1.75, 0.16, 'sawtooth', 0.14],
-        [146.83, 2.1, 0.3, 'sawtooth', 0.16],
-        // Party horn stabs
-        [440.0, 0.18, 0.12, 'triangle', 0.15],
-        [523.25, 0.18, 0.12, 'triangle', 0.15],
-        [659.25, 0.18, 0.12, 'triangle', 0.15],
-
-        [440.0, 1.22, 0.12, 'triangle', 0.15],
-        [523.25, 1.22, 0.12, 'triangle', 0.15],
-        [659.25, 1.22, 0.12, 'triangle', 0.15],
-
-        [493.88, 2.28, 0.25, 'triangle', 0.18],
-        [587.33, 2.28, 0.25, 'triangle', 0.18],
-        [740.0, 2.28, 0.25, 'triangle', 0.18],
-      ];
-      totalDuration = 3.6;
-      break;
-    }
-
-    case 'nyashinski': {
-      // Malaika acoustic baraka serenade
-      const notesM = [329.63, 392.0, 493.88, 587.33, 659.25, 783.99];
-      const mSeq: NoteDef[] = [];
-      let t = 0;
-      for (let i = 0; i < 8; i++) {
-        const freq = notesM[i % notesM.length];
-        mSeq.push([freq, t, 0.35, 'triangle', 0.12]);
-        mSeq.push([freq / 2, t, 0.25, 'sine', 0.1]);
-        t += 0.32;
-      }
-      notes = mSeq;
-      totalDuration = 3.5;
-      break;
-    }
-
-    case 'benga':
-    default: {
-      // Benga folk kalimba beat (rapid joyful African marimba)
-      const bScale = [523.25, 587.33, 659.25, 783.99, 880.0, 1046.5];
-      const bSeq: NoteDef[] = [];
-      const pattern = [0, 2, 4, 3, 2, 4, 5, 4, 2, 1, 0];
-      pattern.forEach((idx, i) => {
-        bSeq.push([bScale[idx], i * 0.18, 0.2, 'triangle', 0.13]);
-        if (i % 2 === 0) {
-          bSeq.push([bScale[idx] / 2, i * 0.18, 0.15, 'sine', 0.11]);
-        }
-      });
-      notes = bSeq;
-      totalDuration = pattern.length * 0.18 + 0.5;
-      break;
-    }
-  }
-
-  notes.forEach(([freq, offset, dur, type, gainVal]) => {
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-
-    osc.type = type;
-    osc.frequency.setValueAtTime(freq, now + offset);
-
-    gain.gain.setValueAtTime(0, now + offset);
-    gain.gain.linearRampToValueAtTime(gainVal, now + offset + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + offset + dur);
-
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-
-    osc.start(now + offset);
-    osc.stop(now + offset + dur + 0.05);
-
-    activeTrackNodes.push({ osc, gain });
-  });
-
-  currentTrackTimeout = setTimeout(() => {
-    currentPlayingTrackId = null;
-    activeTrackNodes = [];
-    if (onEnded) onEnded();
-  }, totalDuration * 1000);
-
-  return stopBashTrackMelody;
+  return () => {};
 }
